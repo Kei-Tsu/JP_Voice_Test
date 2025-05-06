@@ -7,10 +7,11 @@ import librosa.display
 import tempfile
 import os # 一時ファイルの削除に必要
 import queue 
-from streamlit_webrtc import webrtc_streamer, WebRtcMode # ブラウザで音声を録音するためのライブラリ
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, ClientSettings # ブラウザで音声を録音するためのライブラリ
 RTC_CONFIGURATION = {
     "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
 }
+
 import av
 import scipy.io.wavfile
 import time
