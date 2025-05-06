@@ -370,16 +370,21 @@ elif page == "練習を始める":
 
         with col1:
             if st.button("録音開始", key="start_recording"):
-                # セッション状態とグローバル変数の両方を更新
+
                 st.session_state.recording_state["is_recording"] = True
                 st.session_state.recorded_frames = []      
                 # グローバル変数を更新
                 global_recording_state["is_recording"] = True
                 global_recorded_frames.clear()  # 録音フレームをクリア
                 st.success("録音を開始しました。サンプル文を読み上げてください。")
+                st.write(f"録音中フラグ（session）: {st.session_state.recording_state['is_recording']}")
+                st.write(f"録音中フラグ（global）: {global_recording_state['is_recording']}")
         
         with col2:
             if st.button("録音停止", key="stop_rec1"):
+                st.write("録音停止ボタンが押されました")
+                st.write(f"録音フレーム数（global）: {len(global_recorded_frames)}")
+
                 # セッション状態を更新
                 st.session_state.recording_state["is_recording"] = False
 
