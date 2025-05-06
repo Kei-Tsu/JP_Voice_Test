@@ -33,7 +33,7 @@ def is_audio_file(filename):
     return ext in [".wav", ".mp3"]
 
 # 変数を初期化
-uploaded_file = None  # 変数を事前に定義
+uploaded_file = None  # 変数を事前に定義する
 
 # セッション状態の初期化
 if 'recording_state' not in st.session_state:
