@@ -8,7 +8,7 @@ import tempfile
 import os # 一時ファイルの削除に必要
 import queue 
 from streamlit_webrtc import webrtc_streamer, WebRtcMode # ブラウザで音声を録音するためのライブラリ
-from streamlit_webrtc import ClientSettings 
+
 RTC_CONFIGURATION = {
     "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
 }
@@ -335,7 +335,6 @@ elif page == "練習を始める":
     webrtc_ctx = webrtc_streamer(
         key="speech-recorder",
         mode=WebRtcMode.SENDONLY,
-        client_settings=ClientSettings(rtc_configuration=RTC_CONFIGURATION),  
         audio_frame_callback=audio_frame_callback,
         rtc_configuration={
             "iceServers": [
