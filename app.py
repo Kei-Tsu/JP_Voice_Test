@@ -595,7 +595,7 @@ if st.session_state.input_method == "ファイルをアップロード":
         file_ext = os.path.splitext(uploaded_file.name)[1].lower()
         st.write(f"抽出されたファイルの拡張子: {file_ext}")
         st.write(f'許可されている拡張子:[".wav",".mp3"]')
-        st.write(f"拡張子は許可リストに含まれています: {file_ext in [".wav", ".mp3"]}")
+        st.write(f'拡張子は許可リストに含まれています: {file_ext in [".wav", ".mp3"]}')
 
    
         # 音声ファイルを再生可能に表示
