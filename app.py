@@ -333,6 +333,7 @@ elif page == "練習を始める":
     webrtc_ctx = webrtc_streamer(
         key="speech-recorder",
         mode=WebRtcMode.SENDONLY,
+        client_settings=ClientSettings(rtc_configuration=RTC_CONFIGURATION),  
         audio_frame_callback=audio_frame_callback,
         rtc_configuration={
             "iceServers": [
