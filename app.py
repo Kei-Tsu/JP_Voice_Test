@@ -391,7 +391,7 @@ elif page == "練習を始める":
                 # グローバル変数を更新
                 global_recording_state["is_recording"] = False
                 
-                # グローバル変数から録音フレームを取得
+                # グローバル変数から録音フレームを取得する
                 if len(global_recorded_frames) > 0:
                     try:
                         # フレームを結合
