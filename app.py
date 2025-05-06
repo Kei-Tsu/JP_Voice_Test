@@ -282,7 +282,7 @@ if page == "ホーム":
     
     if st.button("練習を始める"):
         st.session_state.page = "練習を始める"
-        st.rerun()
+        st.experimental_rerun() 
 
 
 elif page == "練習を始める":
