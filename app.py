@@ -6,8 +6,13 @@ import librosa
 import librosa.display
 import tempfile
 import os # 一時ファイルの削除に必要
-import queue 
+import queue
+import altair as alt # グラフ描画用 
+import matplotlib.pyplot as plt # グラフ描画用
+
+# WebRTC関連のライブラリのインポート
 from streamlit_webrtc import webrtc_streamer, WebRtcMode # ブラウザで音声を録音するためのライブラリ
+from streamlit_webrtc import RTCConfiguration
 
 RTC_CONFIGURATION = {
     "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
@@ -37,18 +42,36 @@ uploaded_file = None  # 変数を事前に定義する
 
 # セッション状態の初期化
 if 'recording_state' not in st.session_state:
-    st.session_state.recording_state = {"is_recording": False}
+    st.session_state.recording_state = {"is_recording": False} # 録音中かどうかのフラグ
 if 'recorded_frames' not in st.session_state:
-    st.session_state.recorded_frames = []
+    st.session_state.recorded_frames = [] # 録音したフレームを保存するリスト
 if 'recorded_audio' not in st.session_state:
-    st.session_state.recorded_audio = None
-if 'recording_in_progress' not in st.session_state:
-    st.session_state.recording_in_progress = False
+    st.session_state.recorded_audio_path = None # 録音した音声ファイルのパス
+if 'volume_history' not in st.session_state:
+    st.session_state.volume_history = []  # 音量履歴（グラフ表示用）
+if 'last_sound_time' not in st.session_state:
+    st.session_state.last_sound_time = time.time()  # 最後に音が検出された時間
+if 'silence_threshold' not in st.session_state:
+    st.session_state.silence_threshold = -35  # 無音と判定するdBのしきい値
+if 'auto_stop_duration' not in st.session_state:
+    st.session_state.auto_stop_duration = 1000  # 自動停止する無音時間（ミリ秒）
 if "input_method" not in st.session_state:
-    st.session_state.input_method = "録音する"
-# 録音状態の変更を検出するためのフラグ
-if 'state_changed' not in st.session_state:
-    st.session_state.state_changed = False
+    st.session_state.input_method = "録音する"  # デフォルトの入力方法  
+
+def start_recording():
+    """録音を開始する関数"""
+    st.session_state.recording_state["is_recording"] = True
+    st.session_state.recorded_frames = []  # 録音フレームをクリア
+    st.toast("録音を開始しました", icon="🎤")
+    
+def stop_recording():
+    """録音を停止する関数"""
+    st.session_state.recording_state["is_recording"] = False
+    st.toast("録音を停止しました", icon="✅")
+    # 録音フレームがある場合は処理
+    if len(st.session_state.recorded_frames) > 0:
+        return True
+    return False
 
 # グローバル変数（WebRTCコールバック用）
 global_recording_state = {"is_recording": False}
@@ -62,34 +85,150 @@ audio_queue = queue.Queue()
 # 音声フレーム処理のコールバック関数
 def audio_frame_callback(frame):
     """音声フレームを処理するコールバック関数"""
-    global global_recording_state, global_recorded_frames
-
+    
     try:
         sound = frame.to_ndarray()
-        audio_queue.put(sound)
+        
+        # 現在の音量レベルを計算
+        audio_data = sound.flatten() 
+        if len(audio_data) > 0:
+            # RMS(二乗平均平方根）で音量を計算
+            rms = np.sqrt(np.mean(audio_data**2))  # RMS音量計算
+            db = 20 * np.log10(max(rms, 1e-10))  # dBに変換(非常に小さい値の場合の対策)
 
-        #グローバル変数を使用して録音状態を確認
-        if global_recording_state.get("is_recording", False):
-            # 録音中の場合、フレームを追加
-            global_recorded_frames.append(sound.copy())
-            print(f"録音フレーム追加: 現在の総フレーム数={len(global_recorded_frames)}")
+        # 音量履歴に追加（グラフ表示用）
+        if 'volume_history' in st.session_state:
+            st.session_state.volume_history.append({"音量": db})
+            # 音量履歴の長さを制限(パフォーマンス向上のため)
+                     
+
+        # 録音中の場合のみフレームを保存（メモリ使用量を減らすため）
+        if st.session_state.recording_state ["is_recording"]:
+            st.sesson_state.recorded_frames.append(sound.copy())  # 録音フレームを保存
     
     except Exception as e:
         print(f"フレーム処理エラー: {e}")
 
     return frame
-    
-     # デバッグ情報の表示（残す）
-    st.write("## デバッグ情報")
-    st.write(f"WebRTCの状態: {webrtc_ctx.state}")
-    st.write(f"録音状態: {global_recording_state}")
-    st.write(f"録音フレーム数: {len(global_recorded_frames)}")
-    st.write(f"audio_queueの型: {type(audio_queue)}")
 
-# if 'recorded_audio' in st.session_state:
-#    st.write(f"録音ファイルのパス: {st.session_state.recorded_audio}")
-# else:
-#    st.write("録音ファイルはまだありません")
+def show_debug_info(webrtc_ctx):
+    """デバッグ情報を表示する関数"""   
+    # デバッグ情報の表示オン/オフを切り替えるためのチェックボックス
+    if st.checkbox("デバッグ情報を表示", value=False):
+        st.write("### デバッグ情報")
+        st.write(f"WebRTCの状態: {webrtc_ctx.state}")
+        st.write(f"録音状態: {st.session_state.recording_state}")
+        st.write(f"録音フレーム数: {len(st.session_state.recorded_frames)}")
+
+        # 追加のデバッグ情報
+        if 'current_silence_duration' in st.session_state:
+            st.write(f"現在の無音時間: {st.session_state.current_silence_duration:.2f} ms")
+
+        if 'volume_history' in st.session_state:
+            st.write(f"音量履歴データ数: {len(st.session_state.volume_history)}")
+
+        # 最新の音量を表示
+        if 'volume_history' in st.session_state and len(st.session_state.volume_history) > 0:
+            st.write(f"最新の音量履歴: {st.session_state.volume_history[-1]['音量']:.2f} dB")
+            
+# 音量メーター表示用の関数
+def display_volume_meter(placeholder):
+    """リアルタイム音量メーターを表示する関数"""
+    if 'volume_history' in st.session_state and len(st.session_state.volume_history) > 0:
+        # 音量履歴をデータフレームに変換
+        df = pd.DataFrame(st.session_state.volume_history)
+        df = df.reset_index().rename(columns={"index": "時間"})
+
+        # Altairを使ったグラフ表示
+        chart = alt.Chart(df).mark_line().encode(
+            x=alt.X("時間", axis=None),  # x軸ラベルを非表示
+            y=alt.Y("音量", title="音量 (dB)", scale=alt.Scale(domain=[-80, 0]))
+        ).properties(
+            height=200,
+            width='container'
+        )
+
+        # プレースホルダーにグラフを表示
+        placeholder.altair_chart(chart, use_container_width=True)
+
+def recording_controls(webrtc_ctx, status_placeholder, recording_status_placeholder):
+    """録音操作のUI部分"""
+    if webrtc_ctx.state.playing:
+        # WebRTC接続が有効な場合
+        status_placeholder.success("マイクが接続されています", icon="✅")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # 録音開始ボタン（録音中は無効化）
+            start_button = st.button(
+                "録音開始", 
+                disabled=st.session_state.recording_state["is_recording"],
+                key="start_rec_button"
+            )
+            if start_button:
+                # 録音開始処理
+                st.session_state.recording_state["is_recording"] = True
+                st.session_state.recorded_frames = []  # 録音データをクリア
+                recording_status_placeholder.warning("録音中... 話し終わったら「録音停止」ボタンを押してください。", icon="🎙️")
+                st.toast("録音を開始しました", icon="🎙️")
+                st.experimental_rerun()  # UIを更新
+            with col2:
+                # 録音停止ボタン（録音中のみ有効）
+                stop_button = st.button(
+                    "録音停止", 
+                    disabled=not st.session_state.recording_state["is_recording"],
+                    key="stop_rec_button"
+                )
+                if stop_button:
+                    # 録音停止処理
+                    st.session_state.recording_state["is_recording"] = False
+                    recording_status_placeholder.success("録音が停止されました。", icon="✅")
+                    st.toast("録音を停止しました", icon="✅")
+
+                    # 録音データの処理（フレームの結合と保存）
+                    if len(st.session_state.recorded_frames) > 0:
+                        # ここで process_recorded_audio() を呼び出す予定
+                        recording_status_placeholder.success("録音データの準備ができました", icon="✅")
+                    else:
+                        recording_status_placeholder.error("録音データがありません", icon="❌")
+                    
+                    st.experimental_rerun()  # UIを更新
+
+    else:
+        # WebRTC接続が無効な場合
+        status_placeholder.warning("マイクが接続されていません。「START」ボタンを押してくマイクを有効化してください。", icon="🎤")
+
+def configure_webrtc():
+    """WebRTCの設定を行う関数"""
+    return webrtc_streamer(
+        key="speech-recorder",
+        mode=WebRtcMode.SENDONLY,
+        audio_frame_callback=audio_frame_callback,
+        rtc_configuration={
+            "iceServers": [
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {"urls": ["stun:stun1.l.google.com:19302"]},
+                {"urls": ["stun:stun2.l.google.com:19302"]},
+                {"urls": ["stun:stun3.l.google.com:19302"]},
+                {"urls": ["stun:stun4.l.google.com:19302"]},
+            ],
+            "iceTransportPolicy": "all",
+            "iceCandidatePoolSize": 10,
+            "bundlePolicy": "max-bundle",
+            "rtcpMuxPolicy": "require"
+        },
+        media_stream_constraints={
+            "video": False, 
+            "audio": {
+                "echoCancellation": True,
+                "noiseSuppression": True,
+                "autoGainControl": True,
+            }
+        },
+        async_processing=True,
+    )
+                         
 
 # 会話サンプル
 CONVERSATION_SAMPLES = {
@@ -303,6 +442,16 @@ elif page == "練習を始める":
     st.write(selected_sample)
     st.write("このサンプル文を、普段のように自然に読み上げてください。")
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # 音声入力方法の選択
+    st.session_state.input_method = st.radio("音声入力方法", ["録音する", "ファイルをアップロード"])
+
+    # プレースホルダーの準備（動的更新用）
+    status_placeholder = st.empty()
+    volume_placeholder = st.empty()
+    recording_status_placeholder = st.empty()
+    analysis_placeholder = st.empty()
+    
 
     # セッション状態にデフォルト値を設定
     if "input_method" not in st.session_state:
