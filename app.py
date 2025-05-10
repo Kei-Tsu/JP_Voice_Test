@@ -556,7 +556,7 @@ elif page == "練習を始める":
     st.markdown('</div>', unsafe_allow_html=True)
 
     # 音声入力方法の選択
-    st.session_state.input_method = st.radio("音声入力方法", ["録音する", "ファイルをアップロード"])
+    st.session_state.input_method = st.radio("音声入力方法", ["録音する", "ファイルをアップロード"],key="unique_key_1") 
 
     # プレースホルダーの準備（動的更新用）
     status_placeholder = st.empty()
@@ -584,7 +584,7 @@ elif page == "練習を始める":
             st.write(f"アップロードされたファイル: {uploaded_file.name}")
     
     # 音声入力方法の選択（ラジオボタン） 
-    st.session_state.input_method = st.radio("音声入力方法", ["録音する", "ファイルをアップロード"])
+    st.session_state.input_method = st.radio("音声入力方法", ["録音する", "ファイルをアップロード"], key="input_method_radio_unique")
           
     # 録音する場合の処理
     if st.session_state.input_method == "録音する":
