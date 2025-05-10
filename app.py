@@ -88,13 +88,23 @@ def audio_frame_callback(frame):
     
     try:
         sound = frame.to_ndarray()
-        
-        # 現在の音量レベルを計算
-        audio_data = sound.flatten() 
-        if len(audio_data) > 0:
-            # RMS(二乗平均平方根）で音量を計算
-            rms = np.sqrt(np.mean(audio_data**2))  # RMS音量計算
-            db = 20 * np.log10(max(rms, 1e-10))  # dBに変換(非常に小さい値の場合の対策)
+
+        # グローバル録音状態の確認
+        if global_recording_state["is_recording"]:
+            # 録音中の場合のみフレームを保存
+            global_recorded_frames.append(sound.copy())
+            
+    except Exception as e:
+        print(f"フレーム処理エラー: {e}")
+    
+    return frame
+          
+    # 現在の音量レベルを計算
+    audio_data = sound.flatten() 
+    if len(audio_data) > 0:
+        # RMS(二乗平均平方根）で音量を計算
+        rms = np.sqrt(np.mean(audio_data**2))  # RMS音量計算
+        db = 20 * np.log10(max(rms, 1e-10))  # dBに変換(非常に小さい値の場合の対策)
 
         # 音量履歴に追加（グラフ表示用）
         if 'volume_history' in st.session_state:
@@ -104,12 +114,15 @@ def audio_frame_callback(frame):
 
         # 録音中の場合のみフレームを保存（メモリ使用量を減らすため）
         if st.session_state.recording_state ["is_recording"]:
-            st.sesson_state.recorded_frames.append(sound.copy())  # 録音フレームを保存
-    
-    except Exception as e:
-        print(f"フレーム処理エラー: {e}")
+            st.session_state.recorded_frames.append(sound.copy())  # 録音フレームを保存
 
-    return frame
+def audio_frame_callback(frame):
+    """音声フレームを処理するコールバック関数"""
+    try:
+        sound = frame.to_ndarray()
+    except Exception as e:
+        st.error(f"Error processing audio frame: {e}")
+        return frame
 
 def show_debug_info(webrtc_ctx):
     """デバッグ情報を表示する関数"""   
@@ -606,10 +619,10 @@ elif page == "練習を始める":
   
     # WebRTC音声ストリーミング    
 
-    
+    webrtc_ctx = webrtc_streamer(
         key="speech-recorder-main",
         mode=WebRtcMode.SENDONLY,
-        audio_frame_callback=audio_frame_callback,
+        audio_receiver_size=256,  
         rtc_configuration={
             "iceServers": [
                 {"urls": ["stun:stun.l.google.com:19302"]},
@@ -632,7 +645,8 @@ elif page == "練習を始める":
             }
         },
         async_processing=False, # 非同期処理を無効にする
-    
+    )
+
     # WebRTC接続が有効な場合
     if webrtc_ctx.state.playing:
         st.success("WebRTC接続が確立されました。録音を開始します。")
