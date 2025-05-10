@@ -202,7 +202,7 @@ def recording_controls(webrtc_ctx, status_placeholder, recording_status_placehol
 def configure_webrtc():
     """WebRTCの設定を行う関数"""
     return webrtc_streamer(
-        key="speech-recorder",
+        key="speech-recorder-config",
         mode=WebRtcMode.SENDONLY,
         audio_frame_callback=audio_frame_callback,
         rtc_configuration={
@@ -608,7 +608,7 @@ elif page == "練習を始める":
     # WebRTC音声ストリーミング    
 
     webrtc_ctx = webrtc_streamer(
-        key="speech-recorder",
+        key="speech-recorder-main",
         mode=WebRtcMode.SENDONLY,
         audio_frame_callback=audio_frame_callback,
         rtc_configuration={
