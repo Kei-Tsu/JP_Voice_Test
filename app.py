@@ -228,6 +228,118 @@ def configure_webrtc():
         },
         async_processing=True,
     )
+def process_recorded_audio(analysis_placeholder):
+    """録音データを処理して音声分析を行う関数"""
+    if len(st.session_state.recorded_frames) == 0:
+        st.warning("録音データがありません。再度録音してください。")
+        return
+    
+    try:
+        # 録音フレームを結合
+        audio_data = np.concatenate(st.session_state.recorded_frames, axis=0)
+        sample_rate = 48000  # WebRTCのデフォルトサンプルレート
+        
+        # WAVファイルとして保存
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+            scipy.io.wavfile.write(tmp_file.name, sample_rate, audio_data)
+            st.session_state.recorded_audio_path = tmp_file.name
+            
+        # 音声分析
+        y, sr = librosa.load(st.session_state.recorded_audio_path, sr=None)
+        
+        # 特徴量抽出（既存の関数を利用）
+        features = feature_extractor.extract_features(y, sr)
+        
+        # 分析結果表示用のコンテナを作成
+        with analysis_placeholder.container():
+            st.subheader("録音された音声")
+            st.audio(st.session_state.recorded_audio_path, format="audio/wav")
+            
+            # 音声波形と音量変化のグラフ表示
+            st.subheader("音声分析")
+            fig = plot_audio_analysis(features, y, sr)
+            st.pyplot(fig)
+            
+            # 音量分析結果のメトリクス表示
+            st.markdown('<h2 class="sub-header">音量分析結果</h2>', unsafe_allow_html=True)
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                st.metric("平均音量", f"{features['mean_volume']:.4f}")
+                st.metric("文頭音量", f"{features['start_volume']:.4f}")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                st.metric("文中音量", f"{features['middle_volume']:.4f}")
+                st.metric("文末音量", f"{features['end_volume']:.4f}")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                st.metric("文末音量低下率", f"{features['end_drop_rate']:.2f}")
+                if 'last_20_percent_drop_rate' in features:
+                    st.metric("最後の20%音量低下率", f"{features['last_20_percent_drop_rate']:.2f}")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            # 明瞭度評価
+            evaluation = evaluate_clarity(features)
+            
+            st.markdown('<h2 class="sub-header">明瞭度評価</h2>', unsafe_allow_html=True)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                st.metric("明瞭度スコア", f"{evaluation['score']}/100")
+                st.metric("評価", evaluation["clarity_level"])
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                st.subheader("アドバイス")
+                st.write(evaluation["advice"])
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            # 追加: 詳細な特徴量表示（オプション）
+            if st.checkbox("詳細な特徴量を表示", key="show_detailed_features"):
+                st.subheader("抽出された特徴量")
+                
+                # 特徴量をカテゴリ別に整理して表示
+                volume_features = {k: v for k, v in features.items() if 'volume' in k or 'rms' in k or 'drop' in k}
+                spectral_features = {k: v for k, v in features.items() if 'spectral' in k or 'mfcc' in k}
+                rhythm_features = {k: v for k, v in features.items() if 'onset' in k or 'speech' in k}
+                
+                st.write("### 音量関連特徴量")
+                st.write(pd.DataFrame({
+                    '特徴量': list(volume_features.keys()),
+                    '値': list(volume_features.values())
+                }))
+                
+                if spectral_features:
+                    st.write("### スペクトル特徴量")
+                    st.write(pd.DataFrame({
+                        '特徴量': list(spectral_features.keys()),
+                        '値': list(spectral_features.values())
+                    }))
+                
+                if rhythm_features:
+                    st.write("### リズム関連特徴量")
+                    st.write(pd.DataFrame({
+                        '特徴量': list(rhythm_features.keys()),
+                        '値': list(rhythm_features.values())
+                    }))
+        
+        # 一時ファイルのクリーンアップは必要に応じて実装
+        
+    except Exception as e:
+        # エラーハンドリング
+        st.error(f"音声処理中にエラーが発生しました: {e}")
+        # スタックトレースも表示（デバッグ用）
+        import traceback
+        st.code(traceback.format_exc())
                          
 
 # 会話サンプル
@@ -477,9 +589,23 @@ elif page == "練習を始める":
     # 録音する場合の処理
     if st.session_state.input_method == "録音する":
         st.write("### マイクで録音")
-        st.info("「START」ボタンをクリックし、ブラウザからのマイク使用許可リクエストを承認してください。")
-        
-    # WebRTC音声ストリーミング
+        st.info("「START」ボタンをクリックし、ブラウザからのマイク使用許可リクエストを承認してください。")  
+
+    # WebRTC設定
+    webrtc_ctx = configure_webrtc()
+
+    # 録音コントロール表示
+    recording_controls(webrtc_ctx, status_placeholder, recording_status_placeholder,analysis_placeholder) 
+
+    # WebRTC接続が有効な場合の処理
+    if webrtc_ctx.state.playing:
+        # リアルタイム音量メーター表示
+        display_volume_meter(volume_placeholder)
+
+        # デバッグ情報表示
+        show_debug_info(webrtc_ctx)
+  
+    # WebRTC音声ストリーミング    
 
     webrtc_ctx = webrtc_streamer(
         key="speech-recorder",
