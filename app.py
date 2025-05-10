@@ -591,23 +591,22 @@ elif page == "練習を始める":
         st.write("### マイクで録音")
         st.info("「START」ボタンをクリックし、ブラウザからのマイク使用許可リクエストを承認してください。")  
 
-    # WebRTC設定
-    webrtc_ctx = configure_webrtc()
-
     # 録音コントロール表示
     st.session_state.input_method = st.radio("音声入力方法", ["録音する", "ファイルをアップロード"], key="input_method_radio_2")
     
+    webrtc_ctx = configure_webrtc() 
+
     # WebRTC接続が有効な場合の処理
     if webrtc_ctx.state.playing:
         # リアルタイム音量メーター表示
         display_volume_meter(volume_placeholder)
 
-        # デバッグ情報表示
+    # デバッグ情報表示
         show_debug_info(webrtc_ctx)
   
     # WebRTC音声ストリーミング    
 
-    webrtc_ctx = webrtc_streamer(
+    
         key="speech-recorder-main",
         mode=WebRtcMode.SENDONLY,
         audio_frame_callback=audio_frame_callback,
@@ -618,7 +617,6 @@ elif page == "練習を始める":
                 {"urls": ["stun:stun2.l.google.com:19302"]},
                 {"urls": ["stun:stun3.l.google.com:19302"]},
                 {"urls": ["stun:stun4.l.google.com:19302"]},
-                {"urls": ["turn:turn.anyfirewall.com:443?transport=tcp"], "username": "webrtc", "credential": "turnpassword"}  # TURN サーバー
                 ],
             "iceTransportPolicy": "all",
             "iceCandidatePoolSize": 10,
@@ -634,7 +632,7 @@ elif page == "練習を始める":
             }
         },
         async_processing=False, # 非同期処理を無効にする
-    )
+    
     # WebRTC接続が有効な場合
     if webrtc_ctx.state.playing:
         st.success("WebRTC接続が確立されました。録音を開始します。")
