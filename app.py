@@ -633,7 +633,7 @@ elif page == "練習を始める":
                 "autoGainControl": True,
             }
         },
-        async_processing=True, # 非同期処理を有効にする
+        async_processing=False, # 非同期処理を無効にする
     )
     # WebRTC接続が有効な場合
     if webrtc_ctx.state.playing:
