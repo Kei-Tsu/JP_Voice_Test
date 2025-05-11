@@ -646,7 +646,7 @@ if practice_method == "リアルタイム評価":
     else:
         status_placeholder.warning("マイク接続待機中...「START」ボタンをクリックしてください。")
     
-    page = st.session_state.get("page", "ホーム")  # セッションステートから取得できるように補足    
+page = st.session_state.get("page", "ホーム")  # セッションステートから取得できるように補足    
 
 if page == "アプリについて":
     st.markdown('<h1 class="sub-header">アプリについて</h1>', unsafe_allow_html=True)
