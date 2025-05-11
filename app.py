@@ -22,10 +22,6 @@ import av
 import scipy.io.wavfile
 import time
 
-# 日本語フォントの設定
-import matplotlib.font_manager as fm
-import japanize_matplotlib
-
 # アプリケーション設定
 st.set_page_config(
     page_title="語尾までしっかりマスター",
@@ -540,7 +536,7 @@ def main():
                     else:
                         st.error(f"音声分析中にエラーが発生しました: {e}")
                     try:
-                            os.unlink(tmp_file.path)
+                            os.unlink(tmp_file_path)
                     except:
                         pass
         elif practicale_method == "リアルタイム評価":
