@@ -169,17 +169,17 @@ def plot_audio_analysis(features, audio_data, sr):
     
     # 1つ目のプロット: 波形表示
     librosa.display.waveshow(audio_data, sr=sr, ax=ax1)
-    ax1.set_title('音声波形')
-    ax1.set_xlabel('時間 (秒)')
-    ax1.set_ylabel('振幅')
+    ax1.set_title('Audio Waveform')
+    ax1.set_xlabel('Time (Seconds)')
+    ax1.set_ylabel('Amplitude')
     
     # 2つ目のプロット: 音量変化
     rms = features['rms']
     times = features['times']
-    ax2.plot(times, rms, color='blue', label='音量 (RMS)')
-    ax2.set_title('音量変化')
-    ax2.set_xlabel('時間 (秒)')
-    ax2.set_ylabel('音量 (RMS)')
+    ax2.plot(times, rms, color='blue', label='Volume (RMS)')
+    ax2.set_title('Volume Change Over Time')
+    ax2.set_xlabel('Time (seconds)')
+    ax2.set_ylabel('Volume (RMS)')
     
     # 文末部分（最後の20%）を強調表示
     if len(times) > 0:
@@ -188,12 +188,12 @@ def plot_audio_analysis(features, audio_data, sr):
         end_time = times[-1]
         ax2.axvspan(start_highlight, end_time, color='red', alpha=0.2)
         ax2.text(start_highlight + (end_time - start_highlight)/10, 
-               max(rms) * 0.8, '文末部分 (最後の20%)', color='red')
+               max(rms) * 0.8, 'End Part (last 20%)', color='red')
     
     # 文頭・文中・文末の平均音量を水平線で表示
-    ax2.axhline(y=features['start_volume'], color='green', linestyle='--', label='文頭平均')
-    ax2.axhline(y=features['middle_volume'], color='orange', linestyle='--', label='文中平均')
-    ax2.axhline(y=features['end_volume'], color='red', linestyle='--', label='文末平均')
+    ax2.axhline(y=features['start_volume'], color='green', linestyle='--', label='Start Volume Average')
+    ax2.axhline(y=features['middle_volume'], color='orange', linestyle='--', label='Middle Volume Average')
+    ax2.axhline(y=features['end_volume'], color='red', linestyle='--', label='End Volume Average')
     ax2.legend()
     
     plt.tight_layout()
