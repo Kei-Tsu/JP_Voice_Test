@@ -22,6 +22,10 @@ import av
 import scipy.io.wavfile
 import time
 
+# 日本語フォントの設定
+import matplotlib.font_manager as fm
+import japanize_matplotlib
+
 # アプリケーション設定
 st.set_page_config(
     page_title="語尾までしっかりマスター",
@@ -417,14 +421,14 @@ def main():
             # 一時ファイルとして保存
             with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_file:
                 tmp_file.write(uploaded_file.getvalue())
-                tmp_file.file_path = tmp_file.name
+                tmp_file_path = tmp_file.name
             
             # 音声ファイルを再生可能に表示
-            st.audio(tmp_file.name, format='audio/wav')    
+            st.audio(tmp_file_path, format='audio/wav')    
             
             try:
                 # 音声データの読み込み
-                y, sr = librosa.load(tmp_file.name, sr=None)
+                y, sr = librosa.load(tmp_file_path, sr=None)
             
                 # 音声特徴量の抽出
                 features = feature_extractor.extract_features(y, sr)
@@ -524,7 +528,7 @@ def main():
                     st.markdown('</div>', unsafe_allow_html=True)
                     
                     # 一時ファイルを削除
-                    os.remove(tmp_file.path)
+                    os.remove(tmp_file_path)
                     st.success("分析が完了しました！")
                     
             except Exception as e:
