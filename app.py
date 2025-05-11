@@ -22,6 +22,18 @@ import av
 import scipy.io.wavfile
 import time
 
+# セッション状態の初期化
+if 'volume_history' not in st.session_state:
+    st.session_state.volume_history = []  # 音量履歴
+if 'last_sound_time' not in st.session_state:
+    st.session_state.last_sound_time = time.time()  # 最後に音が検出された時間
+if 'current_drop_rate' not in st.session_state:
+    st.session_state.current_drop_rate = 0  # 現在の音量低下率
+if 'end_of_sentence_detected' not in st.session_state:
+    st.session_state.end_of_sentence_detected = False  # 文末検出フラグ
+if 'feedback_history' not in st.session_state:
+    st.session_state.feedback_history = []  # フィードバック履歴
+
 # アプリケーション設定
 st.set_page_config(
     page_title="語尾までしっかりマスター",
@@ -94,17 +106,7 @@ CONVERSATION_SAMPLES = {
         "あのね、昨日見た映画がすごく良かったんだ"
     ]
 }
-# セッション状態の初期化
-if 'volume_history' not in st.session_state:
-    st.session_state.volume_history = []  # 音量履歴
-if 'last_sound_time' not in st.session_state:
-    st.session_state.last_sound_time = time.time()  # 最後に音が検出された時間
-if 'current_drop_rate' not in st.session_state:
-    st.session_state.current_drop_rate = 0  # 現在の音量低下率
-if 'end_of_sentence_detected' not in st.session_state:
-    st.session_state.end_of_sentence_detected = False  # 文末検出フラグ
-if 'feedback_history' not in st.session_state:
-    st.session_state.feedback_history = []  # フィードバック履歴
+
 
 # 音声特徴量抽出のための関数
 # 音声分析のためのクラスと関数の定義
@@ -536,7 +538,9 @@ def main():
                     else:
                         st.error(f"音声分析中にエラーが発生しました: {e}")
                     try:
-                            os.unlink(tmp_file_path)
+                        os.unlink(tmp_file_path)
+                    except Exception as e:
+                        st.error(f"An error occurred while deleting the temporary file: {e}")
                     except:
                         pass
         elif practicale_method == "リアルタイム評価":
@@ -550,20 +554,23 @@ def main():
             history_placeholder = st.empty()
             recording_status_placeholder = st.empty()
             analysis_placeholder = st.empty()
-            
-            # WebRTCストリーマーを設定
-            webrtc_ctx = webrtc_streamer(
-                key="speech-evaluation",
-                mode=WebRtcMode.SENDONLY,
-                audio_frame_callback=audio_frame_callback,
-                rtc_configuration={"iceServers":
-                        [{"urls": ["stun:stun.l.google.com:19302"]} ]},
-                media_stream_constraints={
-                    "video": False, 
-                    "audio":True
-                },
-                async_processing=False,  # 非同期処理を有効にする
-            )       
+
+            try:
+                # WebRTCストリーマーを設定
+                webrtc_ctx = webrtc_streamer(
+                    key="speech-evaluation",
+                    mode=WebRtcMode.SENDONLY,
+                    audio_frame_callback=audio_frame_callback,
+                    rtc_configuration={"iceServers":
+                            [{"urls": ["stun:stun.l.google.com:19302"]} ]},
+                    media_stream_constraints={
+                        "video": False, 
+                        "audio":True
+                    }
+                )
+            except Exception as e:
+                st.error(f"An error occurred while setting up WebRTC: {e}")
+                    
             # WebRTC接続が有効な場合
             if webrtc_ctx.state.playing:
                 # 音量メーターの表示
