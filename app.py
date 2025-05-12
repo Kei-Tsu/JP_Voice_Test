@@ -8,7 +8,10 @@ import tempfile
 import os # 一時ファイルの削除に必要
 import queue
 import altair as alt # グラフ描画用 
-import matplotlib.pyplot as plt # グラフ描画用
+import time
+import asyncio
+from pydub import AudioSegment
+
 
 # WebRTC関連のライブラリのインポート
 try:
@@ -26,7 +29,11 @@ except ImportError:
 
 import av
 import scipy.io.wavfile
-import time
+import logging
+
+#ロガーの設定
+logger = logging.getLogger(__name__)
+
 
 # セッション状態の初期化
 if 'volume_history' not in st.session_state:
@@ -41,6 +48,18 @@ if 'feedback_history' not in st.session_state:
     st.session_state.feedback_history = []  # フィードバック履歴
 if 'page' not in st.session_state:
     st.session_state.page = "ホーム"  # 現在のページ
+# セッション状態の拡張    
+if 'recording' not in st.session_state:
+    st.session_state.recording = False  # 録音中かどうかのフラグ
+if 'recorded_audio' not in st.session_state:
+    st.session_state.recorded_audio = None  # 録音済み音声データ
+if 'temp_audio_file' not in st.session_state:
+    st.session_state.temp_audio_file = None  # 一時保存用の音声ファイルパス
+if 'is_capturing' not in st.session_state:
+    st.session_state.is_capturing = False  # 音声キャプチャ中かどうかのフラグ
+if 'capture_buffer' not in st.session_state:
+    st.session_state.capture_buffer = None  # 音声キャプチャ用バッファ
+
 
 # アプリケーション設定
 st.set_page_config(
@@ -119,7 +138,6 @@ CONVERSATION_SAMPLES = {
 }
 
 
-# 音声特徴量抽出のための関数
 # 音声分析のためのクラスと関数の定義
 class VoiceFeatureExtractor:
     """音声から特徴量を抽出するクラス"""
@@ -147,22 +165,22 @@ class VoiceFeatureExtractor:
         # 文末音量低下率の計算
         features['end_drop_rate'] = (features['middle_volume'] - features['end_volume']) / features['middle_volume'] if features['middle_volume'] > 0 else 0
         
-        # 追加: より詳細な文末分析（最後の20%部分）
+        # より詳細な文末分析（最後の20%部分）
         end_portion = max(1, int(len(rms) * 0.2))  # 最後の20%
         features['last_20_percent_volume'] = np.mean(rms[-end_portion:])
         features['last_20_percent_drop_rate'] = (features['mean_volume'] - features['last_20_percent_volume']) / features['mean_volume'] if features['mean_volume'] > 0 else 0
         
-        # 追加: MFCC特徴量（音声の音色特性）
+        # MFCC特徴量（音声の音色特性）
         mfccs = librosa.feature.mfcc(y=audio_data, sr=sr, n_mfcc=13)
         for i in range(len(mfccs)):
             features[f'mfcc_{i+1}_mean'] = np.mean(mfccs[i])
             features[f'mfcc_{i+1}_std'] = np.std(mfccs[i])
         
-        # 追加: スペクトル特性
+        # スペクトル特性
         spectral_centroid = librosa.feature.spectral_centroid(y=audio_data, sr=sr)[0]
         features['spectral_centroid_mean'] = np.mean(spectral_centroid)
         
-        # 追加: 音声のペース（オンセット検出で音節を近似）
+        # 音声のペース（オンセット検出で音節を近似）
         onset_env = librosa.onset.onset_strength(y=audio_data, sr=sr)
         onsets = librosa.onset.onset_detect(onset_envelope=onset_env, sr=sr)
         features['onset_count'] = len(onsets)
@@ -174,6 +192,7 @@ def analyze_volume(y, sr):
     """基本的な音量分析を行う関数（後方互換性のため）"""
     extractor = VoiceFeatureExtractor()
     features = extractor.extract_features(y, sr)
+    return features 
 
 def plot_audio_analysis(features, audio_data, sr):
     """音声分析の視覚化を行う関数"""
@@ -222,7 +241,7 @@ def evaluate_clarity(features):
     
     if avg_drop_rate < 0.1:
         clarity_level = "良好"
-        advice = "語尾までしっかり発話できています！素晴らしいバランスです。"
+        advice = "語尾までしっかり発話できています！バランスがよい発話です。"
         score = min(100, int((1 - avg_drop_rate) * 100))
     elif avg_drop_rate < 0.25:
         clarity_level = "普通"
@@ -244,71 +263,12 @@ def evaluate_clarity(features):
         "avg_drop_rate": avg_drop_rate
     }
 
-# リアルタイム音声処理のコールバック関数
-def audio_frame_callback(frame):
-    """音声フレームを処理するコールバック関数"""
-    try:
-        # フレームをnumpy配列に変換
-        sound = frame.to_ndarray()
-        
-        # 現在の音量レベルを計算
-        if len(sound) > 0:
-            audio_data = sound.flatten()
-            rms = np.sqrt(np.mean(audio_data**2))
-            db = 20 * np.log10(max(rms, 1e-10))
-            
-            # セッション状態に音量履歴を追加
-            st.session_state.volume_history.append({"音量": db})
-            if len(st.session_state.volume_history) > 100:
-                st.session_state.volume_history.pop(0)
-            
-            # 文末検出のための処理
-            silence_threshold = -40  # 無音判定の閾値（dB）
-            
-            # 音量が閾値より大きい場合、音声あり
-            if db > silence_threshold:
-                st.session_state.last_sound_time = time.time()
-                st.session_state.end_of_sentence_detected = False
-            else:
-                # 無音状態が一定時間続いた場合、文末と判断
-                current_time = time.time()
-                silence_duration = (current_time - st.session_state.last_sound_time) * 1000  # ミリ秒に変換
-                
-                if silence_duration > 500 and not st.session_state.end_of_sentence_detected:  # 0.5秒以上の無音
-                    st.session_state.end_of_sentence_detected = True
-                    
-                    # 文末の音量低下率を計算
-                    if len(st.session_state.volume_history) > 10:
-                        recent_volumes = [item["音量"] for item in st.session_state.volume_history[-10:]]
-                        
-                        # 簡易的な文末判定
-                        if len(recent_volumes) > 5:
-                            before_avg = sum(recent_volumes[-7:-4]) / 3  # 文末前の平均
-                            after_avg = sum(recent_volumes[-3:]) / 3    # 文末の平均
-                            drop_rate = (before_avg - after_avg) / (abs(before_avg) + 1e-10)
-                            
-                            # 判定結果をセッション状態に保存
-                            st.session_state.current_drop_rate = drop_rate
-                            
-                            # フィードバック履歴に追加
-                            feedback = get_feedback(drop_rate)
-                            st.session_state.feedback_history.append({
-                                "time": time.strftime("%H:%M:%S"),
-                                "drop_rate": drop_rate,
-                                "feedback": feedback
-                            })
-    
-    except Exception as e:
-        print(f"音声フレーム処理エラー: {e}")
-    
-    return frame
-
 # ドロップ率に応じたフィードバックを生成
 def get_feedback(drop_rate):
     if drop_rate < 0.1:
         return {
             "level": "good",
-            "message": "素晴らしい！語尾までしっかり発音できています。",
+            "message": "良い感じです！語尾までしっかり発音できています。",
             "emoji": "🌟"
         }
     elif drop_rate < 0.25:
@@ -323,7 +283,6 @@ def get_feedback(drop_rate):
             "message": "語尾の音量が大きく低下しています。文末を意識して！",
             "emoji": "❗"
         }
-
 # リアルタイム音量メーターの表示
 def display_volume_meter(placeholder):
     if len(st.session_state.volume_history) > 0:
@@ -357,6 +316,180 @@ def display_feedback_history(placeholder):
                 unsafe_allow_html=True
             )
 
+# 録音開始/停止ボタン
+def toggle_recording():
+    if st.session_state.recording:
+        st.toast(f"**録音停止**", icon="🎤")
+    else:
+        st.toast(f"**録音開始**", icon="🎤")
+    st.session_state.recording = not st.session_state.recording
+    if not st.session_state.recording:
+        # 録音停止時、キャプチャも停止
+        st.session_state.is_capturing = False
+
+# 音声フレームを処理するコールバック関数(非同期処理対応バージョン)
+def audio_frame_callback(frame):
+    """音声フレームを処理するコールバック関数"""
+    try:
+        # フレームをnumpy配列に変換
+        sound = frame.to_ndarray()
+        
+        # 現在の音量レベルを計算
+        if len(sound) > 0:
+            audio_data = sound.flatten()
+            rms = np.sqrt(np.mean(audio_data**2))
+            db = 20 * np.log10(max(rms, 1e-10))
+            
+            # セッション状態に音量履歴を追加
+            st.session_state.volume_history.append({"音量": db})
+            if len(st.session_state.volume_history) > 100:
+                st.session_state.volume_history.pop(0)
+
+            # パラメータ取得（サイドバーから設定可能）
+            silence_threshold = st.session_state.get('silence_threshold', -40)  # 無音判定の閾値（dB）
+            min_silence_duration = st.session_state.get('min_silence_duration', 500)  # 最小無音時間（ms）    
+            
+            # 音量が閾値より大きい場合、音声あり
+            if db > silence_threshold:
+                st.session_state.last_sound_time = time.time()
+                st.session_state.end_of_sentence_detected = False
+
+                # 録音開始判定（録音モードがオンで、かつキャプチャが開始されていない場合）
+                if st.session_state.recording and not st.session_state.is_capturing:
+                    st.session_state.is_capturing = True
+                    if st.session_state.capture_buffer is None:
+                        st.session_state.capture_buffer = AudioSegment.empty()
+            else:
+                # 無音状態が一定時間続いた場合、文末と判断
+                current_time = time.time()
+                silence_duration = (current_time - st.session_state.last_sound_time) * 1000  # ミリ秒に変換
+                
+                if silence_duration > min_silence_duration and not st.session_state.end_of_sentence_detected:
+                    st.session_state.end_of_sentence_detected = True                   
+                         
+                    # 文末の音量低下率を計算
+                    if len(st.session_state.volume_history) > 10:
+                        recent_volumes = [item["音量"] for item in st.session_state.volume_history[-10:]]
+                        
+                        # 簡易的な文末判定
+                        if len(recent_volumes) > 5:
+                            before_avg = sum(recent_volumes[-7:-4]) / 3  # 文末前の平均
+                            after_avg = sum(recent_volumes[-3:]) / 3    # 文末の平均
+                            drop_rate = (before_avg - after_avg) / (abs(before_avg) + 1e-10)
+                            
+                            # 判定結果をセッション状態に保存
+                            st.session_state.current_drop_rate = drop_rate
+                            
+                            # フィードバック履歴に追加
+                            feedback = get_feedback(drop_rate)
+                            st.session_state.feedback_history.append({
+                                "time": time.strftime("%H:%M:%S"),
+                                "drop_rate": drop_rate,
+                                "feedback": feedback
+                            })
+                    #　録音停止判定（録音中かつ無音が続く場合）
+                    auto_stop_duration = st.session_state.get('auto_stop_duration', 1000)
+                    if st.session_state.recording and st.session_state.is_capturing and silence_duration > auto_stop_duration:
+                        st.session_state.is_capturing = False
+                        # この時点で録音を保存する処理を呼び出す（非同期処理するため、直接呼び出さない）
+           
+            # キャプチャー中であれば音声データを追加
+            if st.session_state.recording and st.session_state.is_capturing:
+                # 音声フレームからpydub形式に変換
+                audio_segment = AudioSegment(
+                    data=frame.to_ndarray().tobytes(),
+                    sample_width=frame.format.bytes,
+                    frame_rate=frame.sample_rate,
+                    channels=len(frame.layout.channels),
+                )
+                # キャプチャバッファに追加
+                if st.session_state.capture_buffer is None:
+                    st.session_state.capture_buffer = audio_segment
+                else:
+                    st.session_state.capture_buffer += audio_segment
+    
+    except Exception as e:
+        logger.error (f"音声フレーム処理エラー: {e}", exc_info = True)
+    
+    return frame
+
+# 一時ファイルへの保存とオーディオプレーヤーの表示 (非同期関数)
+async def save_and_analyze_audio(audio_segment):
+    if audio_segment is None or len(audio_segment) == 0:
+        return
+    
+    # 最低録音時間のチェック
+    min_recording_duration = st.session_state.get('min_recording_duration', 2)
+    recording_duration = len(audio_segment) / 1000.0  # ミリ秒から秒に変換
+    
+    if recording_duration < min_recording_duration:
+        return
+
+ # 一時ファイルの作成
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_file:
+        temp_file_path = tmp_file.name
+    
+    # 音声ファイルの保存 (非同期処理)
+    await asyncio.to_thread(audio_segment.export, temp_file_path, format="wav")
+
+    # 以前の一時ファイルがあれば削除
+    if st.session_state.temp_audio_file and os.path.exists(st.session_state.temp_audio_file):
+        try:
+            os.unlink(st.session_state.temp_audio_file)
+        except Exception as e:
+            logger.warning(f"一時ファイルの削除に失敗: {e}")
+
+    # 新しい一時ファイルのパスを保存
+    st.session_state.temp_audio_file = temp_file_path
+    st.session_state.recorded_audio = audio_segment
+    
+    # 処理後にバッファをクリア
+    st.session_state.capture_buffer = None
+    
+    # GCを強制的に実行してメモリを解放
+    import gc
+    gc.collect()
+
+    # 音声分析を行う
+    try:
+        # 音声データの読み込み
+        y, sr = librosa.load(temp_file_path, sr=None)
+        
+        # 特徴量抽出器の初期化
+        feature_extractor = VoiceFeatureExtractor()
+        
+        # 音声特徴量の抽出
+        features = feature_extractor.extract_features(y, sr)
+        
+        # 評価結果の生成
+        evaluation = evaluate_clarity(features)
+        
+        # セッション状態に結果を保存
+        st.session_state.last_analysis = {
+            "features": features,
+            "evaluation": evaluation,
+            "audio_path": temp_file_path,
+            "audio_data": y,
+            "sr": sr
+        }
+        
+        # 分析完了のフラグをセット
+        st.session_state.analysis_complete = True
+ 
+    except Exception as e:
+        logger.error(f"音声分析中にエラーが発生しました: {e}", exc_info=True)
+        st.session_state.analysis_error = str(e)
+
+# 非同期関数を実行するためのヘルパー関数
+def run_async(async_func, *args, **kwargs):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(async_func(*args, **kwargs))
+    finally:
+        loop.close()
+
+
 # アプリのメイン部分
 def main():
     # 特徴抽出器の初期化
@@ -369,6 +502,42 @@ def main():
     # サイドバーでナビゲーション
     page = st.sidebar.selectbox("ページ選択", ["ホーム", "練習を始める", "本アプリについて"])
     st.session_state.page = page  # ページ状態を更新
+
+    # サイドバーに無音検出設定を追加
+    if page == "練習を始める":
+        st.sidebar.title("無音検出設定")
+        st.session_state.silence_threshold = st.sidebar.slider(
+            "無音しきい値 (dB)", 
+            -80, 0, -40,
+            help="音声を「無音」と判断する音量レベルを設定します。\n"
+                "値が小さいほど（例：-50dB）より小さな音も「音声あり」と判断します。\n"
+                "値が大きいほど（例：-20dB）大きな音のみを「音声あり」と判断します。"
+        )
+
+        st.session_state.min_silence_duration = st.sidebar.slider(
+            "最小無音時間 (ms)", 
+            100, 500, 300,
+            help="この時間以上の無音が続いた場合に「無音区間」と判断します。\n"
+                "短すぎると話の途中の短い間も無音と判断され、\n"
+                "長すぎると長めの間も音声の一部と判断されます。"
+        )
+
+        st.sidebar.title("録音設定")
+        st.session_state.auto_stop_duration = st.sidebar.slider(
+            "無音検出時の自動停止 (ms)", 
+            100, 2000, 1000,
+            help="この時間以上の無音が続くと、自動的に録音を停止します。\n"
+                "話者の発話が終わったことを検出するための設定です。\n"
+                "短すぎると話の途中で録音が止まり、長すぎると無駄な無音時間が録音されます。"
+        )
+        
+        st.session_state.min_recording_duration = st.sidebar.slider(
+            "最低録音時間 (秒)", 
+            1, 10, 2,
+            help="録音を保存する最低限の長さを設定します。\n"
+                "これより短い録音は無視されます。\n"
+                "短すぎると雑音なども録音されやすく、長すぎると短い返事なども無視されます。"
+        )
 
     # ページごとの表示内容
     if page == "ホーム":
@@ -560,7 +729,7 @@ def main():
                     st.markdown('<div class="info-box">', unsafe_allow_html=True)
                         
                     if evaluation["clarity_level"] in ["良好"]:
-                        st.write("素晴らしいです！語尾まで発話できています。")
+                        st.write("良い調子です！語尾まで発話できています。")
                         st.write("- この調子を維持してください！")
                         st.write("- 次のステップ: 他のサンプル文や自然な会話でも試してみましょう。")
                     elif evaluation["clarity_level"] in ["普通", "やや弱い"]:
@@ -623,7 +792,7 @@ def main():
                         drop_rate = st.session_state.current_drop_rate
                                 
                         if drop_rate < 0.1:
-                            status_placeholder.success("- 素晴らしいです！語尾までしっかり発音できています。")
+                            status_placeholder.success("- 良い感じです！語尾までしっかり発音できています。")
                         elif drop_rate < 0.25:
                             status_placeholder.info("- 語尾がやや弱まっています。もう少し意識しましょう。")
                         else:
@@ -645,13 +814,22 @@ def main():
                         """)
                                 
                         st.write("### 音量レベルの目安")
-                        st.write("- -20dB以上: かなり大きな声")
+                        st.write("- -20dB以上: 大きな声")
                         st.write("- -30dB～-20dB: 通常の会話音量")
                         st.write("- -40dB～-30dB: 小声")
-                        st.write("- -40dB以下: 無音または非常に小さい音")
+                        st.write("- -40dB以下: 非常に小さいか聞こえない音量")
                 else:
                     status_placeholder.warning("マイク接続待機中...「START」ボタンをクリックしてください。")
-            
+
+                # 非同期処理: キャプチャが完了したら音声を保存・分析
+                if (st.session_state.get('capture_buffer') is not None and 
+                    not st.session_state.is_capturing and 
+                    st.session_state.end_of_sentence_detected):
+                    # 非同期で音声を保存・分析
+                    run_async(save_and_analyze_audio, st.session_state.capture_buffer)
+                    # フラグをリセット
+                    st.session_state.end_of_sentence_detected = False
+          
             except Exception as e:
                 st.error(f"マイク機能でエラーが発生しました: {e}")
                 st.info("お使いのブラウザがWebRTCに対応していないか、マイクへのアクセス許可がない可能性があります。")
@@ -709,7 +887,17 @@ def main():
         - 本アプリは、専門的な音声分析ツールではなく、あくまで参考としてご利用ください
         """)
 
+# アプリを終了する前に一時ファイルをクリーンアップ
+def cleanup():
+    if st.session_state.get('temp_audio_file') and os.path.exists(st.session_state.temp_audio_file):
+        try:
+            os.unlink(st.session_state.temp_audio_file)
+        except Exception as e:
+            logger.warning(f"一時ファイルの削除に失敗: {e}")
+
 # アプリの実行
 if __name__ == "__main__":
-    main()
-    print("アプリが起動されました")
+    try:
+        main()
+    finally:
+        cleanup()
