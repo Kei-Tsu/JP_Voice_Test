@@ -11,8 +11,18 @@ import altair as alt # グラフ描画用
 import matplotlib.pyplot as plt # グラフ描画用
 
 # WebRTC関連のライブラリのインポート
-from streamlit_webrtc import webrtc_streamer, WebRtcMode # ブラウザで音声を録音するためのライブラリ
-from streamlit_webrtc import RTCConfiguration
+try:
+    from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration  # ブラウザで音声を録音するためのライブラリ
+except ImportError:
+    st.error("streamlit-webrtcライブラリがインストールされていません。'pip install streamlit-webrtc'でインストールしてください。")
+    # ダミー関数を定義（エラーを防ぐため）
+    def webrtc_streamer(*args, **kwargs):
+        return None
+    class WebRtcMode:
+        SENDONLY = "sendonly"
+    class RTCConfiguration:
+        def __init__(self, *args, **kwargs):
+            pass
 
 import av
 import scipy.io.wavfile
