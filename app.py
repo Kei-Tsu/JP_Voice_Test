@@ -14,10 +14,6 @@ import matplotlib.pyplot as plt # グラフ描画用
 from streamlit_webrtc import webrtc_streamer, WebRtcMode # ブラウザで音声を録音するためのライブラリ
 from streamlit_webrtc import RTCConfiguration
 
-RTC_CONFIGURATION = {
-    "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
-}
-
 import av
 import scipy.io.wavfile
 import time
@@ -33,6 +29,8 @@ if 'end_of_sentence_detected' not in st.session_state:
     st.session_state.end_of_sentence_detected = False  # 文末検出フラグ
 if 'feedback_history' not in st.session_state:
     st.session_state.feedback_history = []  # フィードバック履歴
+if 'page' not in st.session_state:
+    st.session_state.page = "ホーム"  # 現在のページ
 
 # アプリケーション設定
 st.set_page_config(
@@ -232,6 +230,7 @@ def evaluate_clarity(features):
         "score": score,
         "avg_drop_rate": avg_drop_rate
     }
+
 # リアルタイム音声処理のコールバック関数
 def audio_frame_callback(frame):
     """音声フレームを処理するコールバック関数"""
@@ -290,6 +289,7 @@ def audio_frame_callback(frame):
         print(f"音声フレーム処理エラー: {e}")
     
     return frame
+
 # ドロップ率に応じたフィードバックを生成
 def get_feedback(drop_rate):
     if drop_rate < 0.1:
@@ -343,6 +343,7 @@ def display_feedback_history(placeholder):
                 f"</div>",
                 unsafe_allow_html=True
             )
+
 # アプリのメイン部分
 def main():
     # 特徴抽出器の初期化
@@ -354,6 +355,7 @@ def main():
 
     # サイドバーでナビゲーション
     page = st.sidebar.selectbox("ページ選択", ["ホーム", "練習を始める", "本アプリについて"])
+    st.session_state.page = page  # ページ状態を更新
 
     # ページごとの表示内容
     if page == "ホーム":
@@ -388,321 +390,313 @@ def main():
     elif page == "練習を始める":
         st.markdown('<h1 class="sub-header">音声練習</h1>', unsafe_allow_html=True)
     
-    # カテゴリーとサンプル文の選択
-    category = st.selectbox("会話カテゴリーを選択", list(CONVERSATION_SAMPLES.keys()))
-    sample_index = st.selectbox(
-        "サンプル文を選択", 
-        range(len(CONVERSATION_SAMPLES[category])),
-        format_func=lambda i: CONVERSATION_SAMPLES[category][i]
-    )
-    
-    selected_sample = CONVERSATION_SAMPLES[category][sample_index]
-    
-    st.markdown('<div class="info-box">', unsafe_allow_html=True)
-    st.write("### 読み上げるサンプル文")
-    st.write(selected_sample)
-    st.write("このサンプル文を、普段のように自然に読み上げてください。")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # 練習方法の選択
-    practice_method = st.radio("練習方法を選択", ["音声ファイルをアップロード", "リアルタイム評価"])
-
-    if practice_method == "音声ファイルをアップロード":
-        # ファイルをアップロードする機能
-        uploaded_file = st.file_uploader(
-            "音声ファイルをアップロードしてください", 
-            type=["wav", "mp3"],
-            key="file_uploader"
+        # カテゴリーとサンプル文の選択
+        category = st.selectbox("会話カテゴリーを選択", list(CONVERSATION_SAMPLES.keys()))
+        sample_index = st.selectbox(
+            "サンプル文を選択", 
+            range(len(CONVERSATION_SAMPLES[category])),
+            format_func=lambda i: CONVERSATION_SAMPLES[category][i]
         )
         
-        if uploaded_file is not None:
-            try:
-                # 一時ファイルとして保存
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_file:
-                    tmp_file.write(uploaded_file.getvalue())
-                    tmp_file_path = tmp_file.name
-            
-                # 音声ファイルを再生可能に表示
-                st.audio(tmp_file_path, format='audio/wav')    
-                       
-                # 音声データの読み込み
-                y, sr = librosa.load(tmp_file_path, sr=None)
-            
-                # 音声特徴量の抽出
-                features = feature_extractor.extract_features(y, sr)
-            
-                # 音声分析の視覚化
-                st.subheader("音声分析結果")    
-                fig = plot_audio_analysis(features, y, sr)
-                st.pyplot(fig)
-            
-                # 音量分析結果の表示
-                st.markdown('<h2 class="sub-header">音量分析結果</h2>', unsafe_allow_html=True)
-                    
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    # フィードバックの表示
-                    st.markdown('<div class="info-box">', unsafe_allow_html=True)
-                    st.metric("平均音量", f"{features['mean_volume']:.4f}")
-                    st.metric("文頭音量", f"{features['start_volume']:.4f}")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                
-                with col2:
-                    st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                    st.metric("文中音量", f"{features['middle_volume']:.4f}")
-                    st.metric("文末音量", f"{features['end_volume']:.4f}")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                
-                with col3:
-                    st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                    st.metric("文末音量低下率", f"{features['end_drop_rate']:.4f}")
-                    st.metric("文末音量低下率(最後の20%)", f"{features['last_20_percent_drop_rate']:.4f}")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    
-                # 音声明瞭度評価
-                evaluation = evaluate_clarity(features)
-                
-                st.markdown('<h2 class="sub-header">音声明瞭度評価</h2>', unsafe_allow_html=True)
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown('<div class="info-box">', unsafe_allow_html=True)
-                    st.metric("明瞭度スコア", f"{evaluation['score']}/100")
-                    st.metric("明瞭度評価", evaluation['clarity_level'])
-                    st.metric("スコア", f"{evaluation['score']}点")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    
-                with col2:
-                    st.markdown('<div class="info-box">', unsafe_allow_html=True)
-                    st.write("アドバイス")
-                    st.write(evaluation['advice'])
-                    st.markdown('</div>', unsafe_allow_html=True)
+        selected_sample = CONVERSATION_SAMPLES[category][sample_index]
+        
+        st.markdown('<div class="info-box">', unsafe_allow_html=True)
+        st.write("### 読み上げるサンプル文")
+        st.write(selected_sample)
+        st.write("このサンプル文を、普段のように自然に読み上げてください。")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-                # 詳細な特徴量表示（オプション）
-                if st.checkbox("詳細な特徴量を表示"):
-                    st.subheader("詳細な特徴量")
-    
-                # 特徴量をカテゴリー別に整理して表示
-                # リスト型のデータを除外または変換
-                volume_features = {}
-                spectral_features = {}
-                rhythm_features = {}
-    
-                # 音量関連特徴量
-                for k, v in features.items():
-                    if 'volume' in k or 'drop' in k:
-                    # rmsとtimesは除外（これらはリスト型のため）
-                        if k not in ['rms', 'times'] and not isinstance(v, (list, np.ndarray)):
-                            volume_features[k] = v
-    
-                # スペクトル特徴量
-                for k, v in features.items():
-                    if 'spectral' in k or 'mfcc' in k:
-                        if not isinstance(v, (list, np.ndarray)):
-                            spectral_features[k] = v
-    
-                # リズム関連特徴量
-                for k, v in features.items():
-                    if 'onset' in k or 'speech' in k:
-                        if not isinstance(v, (list, np.ndarray)):
-                            rhythm_features[k] = v
-    
-                # データフレームに変換して表示
-                st.write("### 音量関連特徴量")
-                if volume_features:
-                    volume_df = pd.DataFrame({
-                        '特徴量': list(volume_features.keys()),
-                        '値': list(volume_features.values())
-                    })
-                    st.dataframe(volume_df)
-                else:
-                    st.write("表示できる音量関連特徴量がありません")
-    
-                st.write("### スペクトル特徴量")
-                if spectral_features:
-                    spectral_df = pd.DataFrame({
-                        '特徴量': list(spectral_features.keys()),
-                        '値': list(spectral_features.values())
-                    })  
-                    st.dataframe(spectral_df)
-                else:
-                    st.write("表示できるスペクトル特徴量がありません")
-    
-                st.write("### リズム関連特徴量")
-                if rhythm_features:
-                    rhythm_df = pd.DataFrame({
-                        '特徴量': list(rhythm_features.keys()),
-                        '値': list(rhythm_features.values())
-                    })
-                    st.dataframe(rhythm_df)
-                else:
-                    st.write("表示できるリズム関連特徴量がありません")
+        # 練習方法の選択
+        practice_method = st.radio("練習方法を選択", ["音声ファイルをアップロード", "リアルタイム評価"])
 
-                     
-                # 練習のヒントと次のステップ
-                st.markdown('<h2 class="sub-header">練習のヒント</h2>', unsafe_allow_html=True)
-                st.markdown('<div class="info-box">', unsafe_allow_html=True)
-                    
-                if evaluation["clarity_level"] in ["良好"]:
-                    st.write("素晴らしいです！語尾まで発話できています。")
-                    st.write("- この調子で続けてください！")
-                    st.write("- 次のステップ: 他のサンプル文や自然な会話でも試してみましょう。")
-                elif evaluation["clarity_level"] in ["普通", "やや弱い"]:
-                    st.write("- 文の最後まで息を残すように意識してみましょう。")
-                    st.write("- 例えば、文末まで意識して話してみてください。")
-                    st.write("- 次のステップ: 息を吸うタイミングを意識してみましょう。")
-                else:
-                    st.write("- 文末を意識して、文を話し始める前に息を吸ってから話してみましょう。")
-                    st.write("- 例えば、文末を1音上げるイメージで話してみましょう。")
-                    st.write("- 次のステップ: 録音してご自身の声を聴くことで、話し方を確認しましょう。")
-                    
-                st.markdown('</div>', unsafe_allow_html=True)
-                    
-                # 一時ファイルを削除
-                os.remove(tmp_file_path)
-                st.success("分析が完了しました！")
-                    
-            except Exception as e:
-                error_msg =str(e)
-                if "PySoundFile" in error_msg:
-                    st.error("音声ファイルの形式が正しくありません。別のwavまたはmp3形式のファイルをお試しください。")
-                elif "empty_file" in error_msg:
-                    st.error("アップロードがいるされた音声ファイルが空です。有効な音声ファイルをアップロードしてください。")
-                else:
-                    st.error(f"音声分析中にエラーが発生しました: {e}")
+        if practice_method == "音声ファイルをアップロード":
+            # ファイルをアップロードする機能
+            uploaded_file = st.file_uploader(
+                "音声ファイルをアップロードしてください", 
+                type=["wav", "mp3"],
+                key="file_uploader"
+            )
+            
+            if uploaded_file is not None:
                 try:
-                    os.unlink(tmp_file_path)
+                    # 一時ファイルとして保存
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_file:
+                        tmp_file.write(uploaded_file.getvalue())
+                        tmp_file_path = tmp_file.name
+                
+                    # 音声ファイルを再生可能に表示
+                    st.audio(tmp_file_path, format='audio/wav')    
+                           
+                    # 音声データの読み込み
+                    y, sr = librosa.load(tmp_file_path, sr=None)
+                
+                    # 音声特徴量の抽出
+                    features = feature_extractor.extract_features(y, sr)
+                
+                    # 音声分析の視覚化
+                    st.subheader("音声分析結果")    
+                    fig = plot_audio_analysis(features, y, sr)
+                    st.pyplot(fig)
+                
+                    # 音量分析結果の表示
+                    st.markdown('<h2 class="sub-header">音量分析結果</h2>', unsafe_allow_html=True)
+                        
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        # フィードバックの表示
+                        st.markdown('<div class="info-box">', unsafe_allow_html=True)
+                        st.metric("平均音量", f"{features['mean_volume']:.4f}")
+                        st.metric("文頭音量", f"{features['start_volume']:.4f}")
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    with col2:
+                        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                        st.metric("文中音量", f"{features['middle_volume']:.4f}")
+                        st.metric("文末音量", f"{features['end_volume']:.4f}")
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    with col3:
+                        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                        st.metric("文末音量低下率", f"{features['end_drop_rate']:.4f}")
+                        st.metric("文末音量低下率(最後の20%)", f"{features['last_20_percent_drop_rate']:.4f}")
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        
+                    # 音声明瞭度評価
+                    evaluation = evaluate_clarity(features)
+                    
+                    st.markdown('<h2 class="sub-header">音声明瞭度評価</h2>', unsafe_allow_html=True)
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown('<div class="info-box">', unsafe_allow_html=True)
+                        st.metric("明瞭度スコア", f"{evaluation['score']}/100")
+                        st.metric("明瞭度評価", evaluation['clarity_level'])
+                        st.metric("スコア", f"{evaluation['score']}点")
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        
+                    with col2:
+                        st.markdown('<div class="info-box">', unsafe_allow_html=True)
+                        st.write("アドバイス")
+                        st.write(evaluation['advice'])
+                        st.markdown('</div>', unsafe_allow_html=True)
+
+                    # 詳細な特徴量表示（オプション）
+                    if st.checkbox("詳細な特徴量を表示"):
+                        st.subheader("詳細な特徴量")
+        
+                    # 特徴量をカテゴリー別に整理して表示
+                    # リスト型のデータを除外または変換
+                    volume_features = {}
+                    spectral_features = {}
+                    rhythm_features = {}
+        
+                    # 音量関連特徴量
+                    for k, v in features.items():
+                        if 'volume' in k or 'drop' in k:
+                        # rmsとtimesは除外（これらはリスト型のため）
+                            if k not in ['rms', 'times'] and not isinstance(v, (list, np.ndarray)):
+                                volume_features[k] = v
+        
+                    # スペクトル特徴量
+                    for k, v in features.items():
+                        if 'spectral' in k or 'mfcc' in k:
+                            if not isinstance(v, (list, np.ndarray)):
+                                spectral_features[k] = v
+        
+                    # リズム関連特徴量
+                    for k, v in features.items():
+                        if 'onset' in k or 'speech' in k:
+                            if not isinstance(v, (list, np.ndarray)):
+                                rhythm_features[k] = v
+        
+                    # データフレームに変換して表示
+                    st.write("### 音量関連特徴量")
+                    if volume_features:
+                        volume_df = pd.DataFrame({
+                            '特徴量': list(volume_features.keys()),
+                            '値': list(volume_features.values())
+                        })
+                        st.dataframe(volume_df)
+                    else:
+                        st.write("表示できる音量関連特徴量がありません")
+        
+                    st.write("### スペクトル特徴量")
+                    if spectral_features:
+                        spectral_df = pd.DataFrame({
+                            '特徴量': list(spectral_features.keys()),
+                            '値': list(spectral_features.values())
+                        })  
+                        st.dataframe(spectral_df)
+                    else:
+                        st.write("表示できるスペクトル特徴量がありません")
+        
+                    st.write("### リズム関連特徴量")
+                    if rhythm_features:
+                        rhythm_df = pd.DataFrame({
+                            '特徴量': list(rhythm_features.keys()),
+                            '値': list(rhythm_features.values())
+                        })
+                        st.dataframe(rhythm_df)
+                    else:
+                        st.write("表示できるリズム関連特徴量がありません")
+
+                         
+                    # 練習のヒントと次のステップ
+                    st.markdown('<h2 class="sub-header">練習のヒント</h2>', unsafe_allow_html=True)
+                    st.markdown('<div class="info-box">', unsafe_allow_html=True)
+                        
+                    if evaluation["clarity_level"] in ["良好"]:
+                        st.write("素晴らしいです！語尾まで発話できています。")
+                        st.write("- この調子を維持してください！")
+                        st.write("- 次のステップ: 他のサンプル文や自然な会話でも試してみましょう。")
+                    elif evaluation["clarity_level"] in ["普通", "やや弱い"]:
+                        st.write("- 文の最後まで息を残すように意識してみましょう。")
+                        st.write("- 例えば、文末まで意識して話してみてください。")
+                        st.write("- 次のステップ: 息を吸うタイミングを意識してみましょう。")
+                    else:
+                        st.write("- 文末を意識して、文を話し始める前に息を吸ってから話してみましょう。")
+                        st.write("- 例えば、文末を1音上げるイメージで話してみましょう。")
+                        st.write("- 次のステップ: 録音してご自身の声を聴くことで、話し方を確認しましょう。")
+                        
+                    st.markdown('</div>', unsafe_allow_html=True)
+                        
+                    # 一時ファイルを削除
+                    os.remove(tmp_file_path)
+                    st.success("分析が完了しました！")
+                        
                 except Exception as e:
-                    st.error(f"An error occurred while deleting the temporary file: {e}")
-                except:
-                    pass
-practice_method = st.radio("練習方法を選択", ["音声ファイルをアップロード", "リアルタイム評価"], key="practice_method")
+                    error_msg =str(e)
+                    if "PySoundFile" in error_msg:
+                        st.error("音声ファイルの形式が正しくありません。別のwavまたはmp3形式のファイルをお試しください。")
+                    elif "empty_file" in error_msg:
+                        st.error("アップロードがいるされた音声ファイルが空です。有効な音声ファイルをアップロードしてください。")
+                    else:
+                        st.error(f"音声分析中にエラーが発生しました: {e}")
+                    try:
+                        os.unlink(tmp_file_path)
+                    except:
+                        pass
 
-if practice_method == "リアルタイム評価":
-    st.write("### リアルタイム評価")
-    st.info("「START」ボタンをクリックし、ブラウザからのマイク使用許可リクエストを承認してください。その後、サンプル文を読み上げると、リアルタイムで評価が表示されます。")
+        elif practice_method == "リアルタイム評価":
+            st.write("### リアルタイム評価")
+            st.info("「START」ボタンをクリックし、ブラウザからのマイク使用許可リクエストを承認してください。その後、サンプル文を読み上げると、リアルタイムで評価が表示されます。")
+                    
+            # プレースホルダーの準備（動的更新用）
+            status_placeholder = st.empty()
+            volume_placeholder = st.empty()
+            feedback_placeholder = st.empty()
+            history_placeholder = st.empty()
+            recording_status_placeholder = st.empty()
+            analysis_placeholder = st.empty()
+
+            try:
+                # WebRTCストリーマーを設定
+                webrtc_ctx = webrtc_streamer(
+                    key="speech-evaluation",
+                    mode=WebRtcMode.SENDONLY,
+                    audio_frame_callback=audio_frame_callback,
+                    rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+                    media_stream_constraints={"video": False, "audio": True}
+                )
+                
+                # WebRTC接続が有効な場合
+                if webrtc_ctx.state.playing:
+                    # 音量メーターの表示
+                    display_volume_meter(volume_placeholder)
+                            
+                    # 状態表示
+                    if st.session_state.end_of_sentence_detected:
+                        drop_rate = st.session_state.current_drop_rate
+                                
+                        if drop_rate < 0.1:
+                            status_placeholder.success("- 素晴らしいです！語尾までしっかり発音できています。")
+                        elif drop_rate < 0.25:
+                            status_placeholder.info("- 語尾がやや弱まっています。もう少し意識しましょう。")
+                        else:
+                            status_placeholder.warning("- 語尾の音量が大きく低下しています。文末を意識して！")
+                    else:
+                        status_placeholder.info("- マイクに向かってサンプル文を読み上げてください。文末を検出したらフィードバックを表示します。")
+                            
+                    # フィードバック履歴の表示
+                    display_feedback_history(feedback_placeholder)
+
+                    # 使い方の補足
+                    with history_placeholder.expander("詳しい使い方"):
+                        st.write("""
+                        1. サンプル文を自然な声で読み上げてください
+                        2. 一度に1つの文を読み、間を空けましょう
+                        3. 文の終わりで少し間を空けると、文末と判断されフィードバックが表示されます
+                        4. 複数の文を読んで練習を続けると、フィードバック履歴が表示されます
+                        5. 音量メーターで自分の声の大きさを確認できます
+                        """)
+                                
+                        st.write("### 音量レベルの目安")
+                        st.write("- -20dB以上: かなり大きな声")
+                        st.write("- -30dB～-20dB: 通常の会話音量")
+                        st.write("- -40dB～-30dB: 小声")
+                        st.write("- -40dB以下: 無音または非常に小さい音")
+                else:
+                    status_placeholder.warning("マイク接続待機中...「START」ボタンをクリックしてください。")
             
-    # プレースホルダーの準備（動的更新用）
-    status_placeholder = st.empty()
-    volume_placeholder = st.empty()
-    feedback_placeholder = st.empty()
-    history_placeholder = st.empty()
-    recording_status_placeholder = st.empty()
-    analysis_placeholder = st.empty()
+            except Exception as e:
+                st.error(f"マイク機能でエラーが発生しました: {e}")
+                st.info("お使いのブラウザがWebRTCに対応していないか、マイクへのアクセス許可がない可能性があります。")
 
-    try:
-        # WebRTCストリーマーを設定
-        webrtc_ctx = webrtc_streamer(
-            key="speech-evaluation",
-            mode=WebRtcMode.SENDONLY,
-            audio_frame_callback=audio_frame_callback,
-            rtc_configuration={"iceServers":
-                    [{"urls": ["stun:stun.l.google.com:19302"]} ]},
-            media_stream_constraints={
-                "video": False, 
-                "audio":True
-            }
-        )
-    except Exception as e:
-        st.error(f"An error occurred while setting up WebRTC: {e}")
-                    
-    # WebRTC接続が有効な場合
-    if webrtc_ctx.state.playing:
-        # 音量メーターの表示
-        display_volume_meter(volume_placeholder)
-                
-        # 状態表示
-        if st.session_state.end_of_sentence_detected:
-            drop_rate = st.session_state.current_drop_rate
-                    
-            if drop_rate < 0.1:
-                status_placeholder.success("- 素晴らしいです！語尾までしっかり発音できています。")
-            elif drop_rate < 0.25:
-                status_placeholder.info("- 語尾がやや弱まっています。もう少し意識しましょう。")
-            else:
-                status_placeholder.warning("- 語尾の音量が大きく低下しています。文末を意識して！")
-        else:
-            status_placeholder.info("- マイクに向かってサンプル文を読み上げてください。文末を検出したらフィードバックを表示します。")
-                
-        # フィードバック履歴の表示
-        display_feedback_history(feedback_placeholder)
-
-        # 使い方の補足
-        with history_placeholder.expander("詳しい使い方"):
-            st.write("""
-            1. サンプル文を自然な声で読み上げてください
-            2. 一度に1つの文を読み、間を空けましょう
-            3. 文の終わりで少し間を空けると、文末と判断されフィードバックが表示されます
-            4. 複数の文を読んで練習を続けると、フィードバック履歴が表示されます
-            5. 音量メーターで自分の声の大きさを確認できます
-            """)
-                    
-            st.write("### 音量レベルの目安")
-            st.write("- -20dB以上: かなり大きな声")
-            st.write("- -30dB～-20dB: 通常の会話音量")
-            st.write("- -40dB～-30dB: 小声")
-            st.write("- -40dB以下: 無音または非常に小さい音")
-    else:
-        status_placeholder.warning("マイク接続待機中...「START」ボタンをクリックしてください。")
-    
-page = st.session_state.get("page", "ホーム")  # セッションステートから取得できるように補足    
-
-if page == "アプリについて":
-    st.markdown('<h1 class="sub-header">アプリについて</h1>', unsafe_allow_html=True)
-        
-    st.write("""
-    ## 語尾までしっかりマスター
-        
-    このアプリは日本語の特性を考慮した音声分析アプリです。特に日本語の文末の音量低下の傾向を検出し、より明確な発話をサポートします。
-        
-    ### 開発背景
-        
-    日本語はSOV型の言語であり、文末に述語や重要な情報が集中します。しかし発話中は時間の経過とともに肺の空気が減少し、文末では自然と声量が低下します。特に家族や友人との親密な会話では気が緩み、この傾向が強くなります。
-        
-           
-    ### 日本語のSOV構造と音量低下
-        
-    日本語のようなSOV構造（Subject-Object-Verb、主語-目的語-動詞）の言語では、文末に動詞や重要な情報が来ることが多いです。例えば：
-        
-    - 「私は**リンゴを食べます**」（日本語：SOV）
-    - "I eat an apple"（英語：SVO）
-        
-    英語では目的語（apple）が文末にありますが、日本語では動詞（食べます）が文末に来ます。このため、日本語では文末の明瞭さがより重要になります。
-        
-    ### アプリの機能
-        
-    - 音声波形と音量変化の可視化
-    - 文末音量低下の検出と評価
-    - リアルタイムフィードバックの提供
-    - 詳細な音声特徴量の分析
-    - 練習のためのサンプル文の提供
-        
-    ### 使用技術
-        
-    - Python
-    - Streamlit
-    - librosa（音声処理）
-    - WebRTC（リアルタイム音声処理）
-    - 機械学習アルゴリズム（特徴量分析）
-        
-    ### 参考文献
-        
-    - Chasin M. Sentence final hearing aid gain requirements of some non-English languages. Can J Speech-Lang Pathol Audiol. 2012;36(3):196-203.
-    - 日本語日常会話コーパスから見える会話場面と声の高さの関係性 (https://repository.ninjal.ac.jp/records/3193)
-    - 小声とは何か、または言語の違いが小声にどのような影響を与えるのか (https://www.oticon.co.jp/hearing-aid-users/blog/2020/20200512)
-    """)
-        
-    st.write("### 留意事項")
-    st.info("""
-    - 本アプリは、音声データを分析するため、プライバシーに配慮してください
-    - 音声データは一時的に保存され、分析後に削除されます
-    - 本アプリは、一般的な音声分析を目的としており、特定の個人や状況に対する評価を行うものではありません
-    - 本アプリは、専門的な音声分析ツールではなく、あくまで参考としてご利用ください
-    """)
+    elif page == "本アプリについて":
+        st.markdown('<h1 class="sub-header">アプリについて</h1>', unsafe_allow_html=True)
+            
+        st.write("""
+        ## 語尾までしっかりマスター
+            
+        このアプリは日本語の特性を考慮した音声分析アプリです。特に日本語の文末の音量低下の傾向を検出し、より明確な発話をサポートします。
+            
+        ### 開発背景
+            
+        日本語はSOV型の言語であり、文末に述語や重要な情報が集中します。しかし発話中は時間の経過とともに肺の空気が減少し、文末では自然と声量が低下します。特に家族や友人との親密な会話では気が緩み、この傾向が強くなります。
+            
+               
+        ### 日本語のSOV構造と音量低下
+            
+        日本語のようなSOV構造（Subject-Object-Verb、主語-目的語-動詞）の言語では、文末に動詞や重要な情報が来ることが多いです。例えば：
+            
+        - 「私は**リンゴを食べます**」（日本語：SOV）
+        - "I eat an apple"（英語：SVO）
+            
+        英語では目的語（apple）が文末にありますが、日本語では動詞（食べます）が文末に来ます。このため、日本語では文末の明瞭さがより重要になります。
+            
+        ### アプリの機能
+            
+        - 音声波形と音量変化の可視化
+        - 文末音量低下の検出と評価
+        - リアルタイムフィードバックの提供
+        - 詳細な音声特徴量の分析
+        - 練習のためのサンプル文の提供
+            
+        ### 使用技術
+            
+        - Python
+        - Streamlit
+        - librosa（音声処理）
+        - WebRTC（リアルタイム音声処理）
+        - 機械学習アルゴリズム（特徴量分析）
+            
+        ### 参考文献
+            
+        - Chasin M. Sentence final hearing aid gain requirements of some non-English languages. Can J Speech-Lang Pathol Audiol. 2012;36(3):196-203.
+        - 日本語日常会話コーパスから見える会話場面と声の高さの関係性 (https://repository.ninjal.ac.jp/records/3193)
+        - 小声とは何か、または言語の違いが小声にどのような影響を与えるのか (https://www.oticon.co.jp/hearing-aid-users/blog/2020/20200512)
+        """)
+            
+        st.write("### 留意事項")
+        st.info("""
+        - 本アプリは、音声データを分析するため、プライバシーに配慮してください
+        - 音声データは一時的に保存され、分析後に削除されます
+        - 本アプリは、一般的な音声分析を目的としており、特定の個人や状況に対する評価を行うものではありません
+        - 本アプリは、専門的な音声分析ツールではなく、あくまで参考としてご利用ください
+        """)
 
 # アプリの実行
 if __name__ == "__main__":
     main()
     print("アプリが起動されました")
-
