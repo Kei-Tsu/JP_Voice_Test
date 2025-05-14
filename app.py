@@ -12,9 +12,30 @@ import time
 import asyncio
 from pydub import AudioSegment
 
+# FFmpeg警告の無視設定を追加
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="Couldn't find ffmpeg or avconv")
 
 # WebRTC関連のライブラリのインポート
+# ロガーの設定
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(handler)
+
 try:
+    pass  # Add your code here
+except Exception as e:
+    logger.error(f"An error occurred: {e}")
+    pass  # Add your code here
+except Exception as e:
+    logger.error(f"An error occurred: {e}")
+try:
+    # Add the code that might raise an exception here
+    pass
+except Exception as e:
+    logger.error(f"An error occurred: {e}")
     from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration  # ブラウザで音声を録音するためのライブラリ
 except ImportError:
     st.error("streamlit-webrtcライブラリがインストールされていません。'pip install streamlit-webrtc'でインストールしてください。")
@@ -34,6 +55,9 @@ import logging
 #ロガーの設定
 logger = logging.getLogger(__name__)
 
+# FFmpeg警告の無視設定を追加（ここに追加）
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="Couldn't find ffmpeg or avconv")
 
 # セッション状態の初期化
 if 'volume_history' not in st.session_state:
@@ -341,25 +365,35 @@ def audio_frame_callback(frame):
             db = 20 * np.log10(max(rms, 1e-10))
             
             # セッション状態に音量履歴を追加
-            st.session_state.volume_history.append({"音量": db})
-            if len(st.session_state.volume_history) > 100:
-                st.session_state.volume_history.pop(0)
-
+            try:
+                st.session_state.volume_history.append({"音量": db})
+                if len(st.session_state.volume_history) > 100:
+                    st.session_state.volume_history.pop(0)
+            except Exception as volume_error:
+                logger.error(f"音量履歴の更新エラー: {volume_error}")
+          
+   
             # パラメータ取得（サイドバーから設定可能）
-            silence_threshold = st.session_state.get('silence_threshold', -40)  # 無音判定の閾値（dB）
-            min_silence_duration = st.session_state.get('min_silence_duration', 500)  # 最小無音時間（ms）    
-            
-            # 音量が閾値より大きい場合、音声あり
-            if db > silence_threshold:
-                st.session_state.last_sound_time = time.time()
-                st.session_state.end_of_sentence_detected = False
-
-                # 録音開始判定（録音モードがオンで、かつキャプチャが開始されていない場合）
-                if st.session_state.recording and not st.session_state.is_capturing:
-                    st.session_state.is_capturing = True
-                    if st.session_state.capture_buffer is None:
-                        st.session_state.capture_buffer = AudioSegment.empty()
-            else:
+            try:
+                silence_threshold = st.session_state.get('silence_threshold', -40)  # 無音判定の閾値（dB）
+                min_silence_duration = st.session_state.get('min_silence_duration', 500)  # 最小無音時間（ms）    
+                       
+                # 音量判定と処理（音量が閾値より大きい場合、音声あり）
+                if db > silence_threshold:
+                    st.session_state.last_sound_time = time.time()
+                    st.session_state.end_of_sentence_detected = False
+                
+                    # 録音開始判定（録音モードがオンで、かつキャプチャが開始されていない場合）
+                try:
+                    if st.session_state.recording and not st.session_state.is_capturing:
+                        st.session_state.is_capturing = True
+                        if st.session_state.capture_buffer is None:
+                            st.session_state.capture_buffer = AudioSegment.empty()
+                except Exception as rec_error:
+                    logger.error(f"録音開始処理エラー: {rec_error}")
+        else:
+                # 無音状態の処理
+            try:
                 # 無音状態が一定時間続いた場合、文末と判断
                 current_time = time.time()
                 silence_duration = (current_time - st.session_state.last_sound_time) * 1000  # ミリ秒に変換
@@ -369,39 +403,74 @@ def audio_frame_callback(frame):
                          
                     # 文末の音量低下率を計算
                     if len(st.session_state.volume_history) > 10:
-                        recent_volumes = [item["音量"] for item in st.session_state.volume_history[-10:]]
+                            try:
+                                recent_volumes = [item["音量"] for item in st.session_state.volume_history[-10:]]
                         
-                        # 簡易的な文末判定
-                        if len(recent_volumes) > 5:
-                            before_avg = sum(recent_volumes[-7:-4]) / 3  # 文末前の平均
-                            after_avg = sum(recent_volumes[-3:]) / 3    # 文末の平均
-                            drop_rate = (before_avg - after_avg) / (abs(before_avg) + 1e-10)
+                                # 簡易的な文末判定
+                                if len(recent_volumes) > 5:
+                                    before_avg = sum(recent_volumes[-7:-4]) / 3  # 文末前の平均
+                                    after_avg = sum(recent_volumes[-3:]) / 3    # 文末の平均
+                                    drop_rate = (before_avg - after_avg) / (abs(before_avg) + 1e-10)
                             
-                            # 判定結果をセッション状態に保存
-                            st.session_state.current_drop_rate = drop_rate
+                                    # 判定結果をセッション状態に保存
+                                    st.session_state.current_drop_rate = drop_rate
                             
-                            # フィードバック履歴に追加
-                            feedback = get_feedback(drop_rate)
-                            st.session_state.feedback_history.append({
-                                "time": time.strftime("%H:%M:%S"),
-                                "drop_rate": drop_rate,
-                                "feedback": feedback
-                            })
-                    #　録音停止判定（録音中かつ無音が続く場合）
-                    auto_stop_duration = st.session_state.get('auto_stop_duration', 1000)
-                    if st.session_state.recording and st.session_state.is_capturing and silence_duration > auto_stop_duration:
-                        st.session_state.is_capturing = False
-                        # この時点で録音を保存する処理を呼び出す（非同期処理するため、直接呼び出さない）
+                                    # フィードバック履歴に追加
+                                    feedback = get_feedback(drop_rate)
+                                    st.session_state.feedback_history.append({
+                                        "time": time.strftime("%H:%M:%S"),
+                                        "drop_rate": drop_rate,
+                                        "level": feedback["level"],
+                                        "message": feedback["message"],
+                                        "emoji": feedback["emoji"]
+                                    })
+                            except Exception as fb_error:
+                                    logger.error(f"フィードバック生成エラー: {fb_error}")
+
+                    #キャプチャー処理
+                    try:
+                        #キャプチャー中であれば音声データを追加
+                        if st.session_state.recording and st.session_state.is_capturing:
+                            #音声フレームからpydub形式に変換
+                            audio_segment = AudioSegment(
+                            data=frame.to_ndarray().tobytes(),
+                            sample_width=frame.format.bytes,
+                            frame_rate=frame.sample_rate,
+                            channels=len(frame.layout.channels),
+                        )
+                        #キャプチャバッファに追加
+                        if st.session_state.capture_buffer is None:
+                            st.session_state.capture_buffer = audio_segment
+                        else:
+                            st.session_state.capture_buffer += audio_segment
+                    except Exception as processing_error:
+                        logger.error(f"音声処理エラー: {processing_error}")
+
+            except Exception as e:
+                logger.error(f"音声フレーム処理エラー: {e}", exc_info=True)
+            
+        return frame
+            
+                
+        #　録音停止判定（録音中かつ無音が続く場合）
+        auto_stop_duration = st.session_state.get('auto_stop_duration', 1000)
+        if st.session_state.recording and st.session_state.is_capturing and silence_duration > auto_stop_duration:
+            st.session_state.is_capturing = False
+            # この時点で録音を保存する処理を呼び出す（非同期処理するため、直接呼び出さない）
            
-            # キャプチャー中であれば音声データを追加
-            if st.session_state.recording and st.session_state.is_capturing:
+            try:
+                # キャプチャー中であれば音声データを追加
+                if st.session_state.recording and st.session_state.is_capturing:
                 # 音声フレームからpydub形式に変換
-                audio_segment = AudioSegment(
-                    data=frame.to_ndarray().tobytes(),
-                    sample_width=frame.format.bytes,
-                    frame_rate=frame.sample_rate,
-                    channels=len(frame.layout.channels),
-                )
+                    audio_segment = AudioSegment(
+                        data=frame.to_ndarray().tobytes(),
+                        sample_width=frame.format.bytes,
+                        frame_rate=frame.sample_rate,
+                        channels=len(frame.layout.channels),
+                    )
+            except Exception as capture_error:
+                logger.error(f"音声キャプチャエラー: {capture_error}")
+
                 # キャプチャバッファに追加
                 if st.session_state.capture_buffer is None:
                     st.session_state.capture_buffer = audio_segment
@@ -763,24 +832,34 @@ def main():
         elif practice_method == "リアルタイム評価":
             st.write("### リアルタイム評価")
             st.info("「START」ボタンをクリックし、ブラウザからのマイク使用許可リクエストを承認してください。その後、サンプル文を読み上げると、リアルタイムで評価が表示されます。")
-                    
-            # プレースホルダーの準備（動的更新用）
-            status_placeholder = st.empty()
-            volume_placeholder = st.empty()
-            feedback_placeholder = st.empty()
-            history_placeholder = st.empty()
-            recording_status_placeholder = st.empty()
-            analysis_placeholder = st.empty()
 
-            try:
-                # WebRTCストリーマーを設定
-                webrtc_ctx = webrtc_streamer(
-                    key="speech-evaluation",
-                    mode=WebRtcMode.SENDONLY,
-                    audio_frame_callback=audio_frame_callback,
-                    rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-                    media_stream_constraints={"video": False, "audio": True}
-                )
+            # フォールバックオプションを追加
+            use_fallback = st.checkbox("マイク接続に問題がある場合はチェック", False)
+    
+            if use_fallback:
+                st.warning("簡易モードに切り替えます。ファイルアップロードを使用してください。")
+                # 簡易モードでは何もしない、ユーザーは上のファイルアップロード機能を使用する
+            
+            else:
+                # プレースホルダーの準備（動的更新用）
+                status_placeholder = st.empty()
+                volume_placeholder = st.empty()
+                feedback_placeholder = st.empty()
+                history_placeholder = st.empty()
+                recording_status_placeholder = st.empty()
+                analysis_placeholder = st.empty()
+
+                try:
+                    # WebRTCストリーマーを設定
+                    webrtc_ctx = webrtc_streamer(
+                        key="speech-evaluation",
+                        mode=WebRtcMode.SENDONLY,
+                        audio_frame_callback=audio_frame_callback,
+                        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+                        media_stream_constraints={"video": False, "audio": True}
+                    )
+                except Exception as e:
+                    st.error(f"WebRTCストリーマーの設定中にエラーが発生しました: {e}")
                 
                 # WebRTC接続が有効な場合
                 if webrtc_ctx.state.playing:
@@ -830,9 +909,9 @@ def main():
                     # フラグをリセット
                     st.session_state.end_of_sentence_detected = False
           
-            except Exception as e:
-                st.error(f"マイク機能でエラーが発生しました: {e}")
-                st.info("お使いのブラウザがWebRTCに対応していないか、マイクへのアクセス許可がない可能性があります。")
+                except Exception as e:
+                        st.error(f"マイク機能でエラーが発生しました: {e}")
+                        st.info("お使いのブラウザがWebRTCに対応していないか、マイクへのアクセス許可がない可能性があります。")
 
     elif page == "本アプリについて":
         st.markdown('<h1 class="sub-header">アプリについて</h1>', unsafe_allow_html=True)
