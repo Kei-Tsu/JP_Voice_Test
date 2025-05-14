@@ -25,17 +25,6 @@ handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s -
 logger.addHandler(handler)
 
 try:
-    pass  # Add your code here
-except Exception as e:
-    logger.error(f"An error occurred: {e}")
-    pass  # Add your code here
-except Exception as e:
-    logger.error(f"An error occurred: {e}")
-try:
-    # Add the code that might raise an exception here
-    pass
-except Exception as e:
-    logger.error(f"An error occurred: {e}")
     from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration  # ブラウザで音声を録音するためのライブラリ
 except ImportError:
     st.error("streamlit-webrtcライブラリがインストールされていません。'pip install streamlit-webrtc'でインストールしてください。")
