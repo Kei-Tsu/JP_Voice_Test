@@ -10,6 +10,7 @@ import queue
 import altair as alt # グラフ描画用 
 import time
 import asyncio
+import logging
 from pydub import AudioSegment
 
 # FFmpeg警告の無視設定を追加
@@ -373,74 +374,84 @@ def audio_frame_callback(frame):
                     st.session_state.end_of_sentence_detected = False
                 
                     # 録音開始判定（録音モードがオンで、かつキャプチャが開始されていない場合）
-                try:
-                    if st.session_state.recording and not st.session_state.is_capturing:
-                        st.session_state.is_capturing = True
-                        if st.session_state.capture_buffer is None:
-                            st.session_state.capture_buffer = AudioSegment.empty()
-                except Exception as rec_error:
-                    logger.error(f"録音開始処理エラー: {rec_error}")
-        else:
-                # 無音状態の処理
-            try:
-                # 無音状態が一定時間続いた場合、文末と判断
-                current_time = time.time()
-                silence_duration = (current_time - st.session_state.last_sound_time) * 1000  # ミリ秒に変換
+                    try:
+                        if st.session_state.recording and not st.session_state.is_capturing:
+                            st.session_state.is_capturing = True
+                            if st.session_state.capture_buffer is None:
+                                st.session_state.capture_buffer = AudioSegment.empty()
+                    except Exception as rec_error:
+                        logger.error(f"録音開始処理エラー: {rec_error}")
+                else:
+                    # 無音状態の処理
+                    try:
+                        # 無音状態が一定時間続いた場合、文末と判断
+                        current_time = time.time()
+                        silence_duration = (current_time - st.session_state.last_sound_time) * 1000  # ミリ秒に変換
                 
-                if silence_duration > min_silence_duration and not st.session_state.end_of_sentence_detected:
-                    st.session_state.end_of_sentence_detected = True                   
+                        if silence_duration > min_silence_duration and not st.session_state.end_of_sentence_detected:
+                            st.session_state.end_of_sentence_detected = True                   
                          
-                    # 文末の音量低下率を計算
-                    if len(st.session_state.volume_history) > 10:
-                            try:
-                                recent_volumes = [item["音量"] for item in st.session_state.volume_history[-10:]]
+                            # 文末の音量低下率を計算
+                            if len(st.session_state.volume_history) > 10:
+                                try:
+                                    recent_volumes = [item["音量"] for item in st.session_state.volume_history[-10:]]
                         
-                                # 簡易的な文末判定
-                                if len(recent_volumes) > 5:
-                                    before_avg = sum(recent_volumes[-7:-4]) / 3  # 文末前の平均
-                                    after_avg = sum(recent_volumes[-3:]) / 3    # 文末の平均
-                                    drop_rate = (before_avg - after_avg) / (abs(before_avg) + 1e-10)
+                                    # 簡易的な文末判定
+                                    if len(recent_volumes) > 5:
+                                        before_avg = sum(recent_volumes[-7:-4]) / 3  # 文末前の平均
+                                        after_avg = sum(recent_volumes[-3:]) / 3    # 文末の平均
+                                        drop_rate = (before_avg - after_avg) / (abs(before_avg) + 1e-10)
                             
-                                    # 判定結果をセッション状態に保存
-                                    st.session_state.current_drop_rate = drop_rate
+                                        # 判定結果をセッション状態に保存
+                                        st.session_state.current_drop_rate = drop_rate
                             
-                                    # フィードバック履歴に追加
-                                    feedback = get_feedback(drop_rate)
-                                    st.session_state.feedback_history.append({
-                                        "time": time.strftime("%H:%M:%S"),
-                                        "drop_rate": drop_rate,
-                                        "level": feedback["level"],
-                                        "message": feedback["message"],
-                                        "emoji": feedback["emoji"]
-                                    })
-                            except Exception as fb_error:
+                                        # フィードバック履歴に追加
+                                        feedback = get_feedback(drop_rate)
+                                        st.session_state.feedback_history.append({
+                                            "time": time.strftime("%H:%M:%S"),
+                                            "drop_rate": drop_rate,
+                                            "level": feedback["level"],
+                                            "message": feedback["message"],
+                                            "emoji": feedback["emoji"]
+                                        })
+                                except Exception as fb_error:
                                     logger.error(f"フィードバック生成エラー: {fb_error}")
 
-                    #キャプチャー処理
-                    try:
-                        #キャプチャー中であれば音声データを追加
-                        if st.session_state.recording and st.session_state.is_capturing:
-                            #音声フレームからpydub形式に変換
-                            audio_segment = AudioSegment(
-                            data=frame.to_ndarray().tobytes(),
-                            sample_width=frame.format.bytes,
-                            frame_rate=frame.sample_rate,
-                            channels=len(frame.layout.channels),
-                        )
-                        #キャプチャバッファに追加
-                        if st.session_state.capture_buffer is None:
-                            st.session_state.capture_buffer = audio_segment
-                        else:
-                            st.session_state.capture_buffer += audio_segment
-                    except Exception as processing_error:
-                        logger.error(f"音声処理エラー: {processing_error}")
+                        #　録音停止判定（録音中かつ無音が続く場合）
+                        auto_stop_duration = st.session_state.get('auto_stop_duration', 1000)
+                        if st.session_state.recording and st.session_state.is_capturing and silence_duration > auto_stop_duration:
+                            st.session_state.is_capturing = False
+                            # この時点で録音を保存する処理を呼び出す（非同期処理するため、直接呼び出さない）
 
-            except Exception as e:
-                logger.error(f"音声フレーム処理エラー: {e}", exc_info=True)
-            
+                        #キャプチャー処理           
+                        try:
+                            # キャプチャー中であれば音声データを追加
+                            if st.session_state.recording and st.session_state.is_capturing:
+                                # 音声フレームからpydub形式に変換
+                                audio_segment = AudioSegment(
+                                    data=frame.to_ndarray().tobytes(),
+                                    sample_width=frame.format.bytes,
+                                    frame_rate=frame.sample_rate,
+                                    channels=len(frame.layout.channels),
+                                )
+                                 
+                                #キャプチャバッファに追加
+                                if st.session_state.capture_buffer is None:
+                                    st.session_state.capture_buffer = audio_segment
+                                else:
+                                    st.session_state.capture_buffer += audio_segment
+                        except Exception as processing_error:
+                            logger.error(f"音声処理エラー: {processing_error}")
+                    except Exception as e:
+                        logger.error(f"音声フレーム処理エラー: {e}", exc_info=True)
+            except Exception as param_error:
+                logger.error(f"パラメータ取得エラー: {param_error}")
+    except Exception as e:
+        logger.error(f"音声フレーム処理エラー: {e}", exc_info=True)        
+
         return frame
             
-                
+              
         #　録音停止判定（録音中かつ無音が続く場合）
         auto_stop_duration = st.session_state.get('auto_stop_duration', 1000)
         if st.session_state.recording and st.session_state.is_capturing and silence_duration > auto_stop_duration:
@@ -889,7 +900,9 @@ def main():
                 else:
                     status_placeholder.warning("マイク接続待機中...「START」ボタンをクリックしてください。")
 
-                # 非同期処理: キャプチャが完了したら音声を保存・分析
+            # 非同期処理: キャプチャが完了したら音声を保存・分析
+            
+            try:
                 if (st.session_state.get('capture_buffer') is not None and 
                     not st.session_state.is_capturing and 
                     st.session_state.end_of_sentence_detected):
@@ -898,9 +911,9 @@ def main():
                     # フラグをリセット
                     st.session_state.end_of_sentence_detected = False
           
-                except Exception as e:
-                        st.error(f"マイク機能でエラーが発生しました: {e}")
-                        st.info("お使いのブラウザがWebRTCに対応していないか、マイクへのアクセス許可がない可能性があります。")
+            except Exception as e:
+                st.error(f"マイク機能でエラーが発生しました: {e}")
+                st.info("お使いのブラウザがWebRTCに対応していないか、マイクへのアクセス許可がない可能性があります。")
 
     elif page == "本アプリについて":
         st.markdown('<h1 class="sub-header">アプリについて</h1>', unsafe_allow_html=True)
