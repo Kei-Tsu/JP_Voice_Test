@@ -18,6 +18,56 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 import joblib
 
+# 音声分析のためのクラスと関数の定義
+class VoiceFeatureExtractor:
+    """音声から特徴量を抽出するクラス"""
+    
+    def extract_features(self, audio_data, sr):
+        """音声特徴量を抽出する関数"""
+        features = {}
+        
+        # 基本的な音量特徴量（RMS）
+        rms = librosa.feature.rms(y=audio_data)[0]
+        times = librosa.times_like(rms, sr=sr)
+        features['rms'] = rms
+        features['times'] = times
+        features['mean_volume'] = np.mean(rms)
+        features['std_volume'] = np.std(rms)
+        features['max_volume'] = np.max(rms)
+        features['min_volume'] = np.min(rms)
+        
+        # 会話音声を三分割した分析
+        third = len(rms) // 3
+        features['start_volume'] = np.mean(rms[:third])  # 最初の1/3
+        features['middle_volume'] = np.mean(rms[third:2*third])  # 中間の1/3
+        features['end_volume'] = np.mean(rms[2*third:])  # 最後の1/3
+        
+        # 文末音量低下率の計算
+        features['end_drop_rate'] = (features['middle_volume'] - features['end_volume']) / features['middle_volume'] if features['middle_volume'] > 0 else 0
+        
+        # より詳細な文末分析（最後の20%部分）
+        end_portion = max(1, int(len(rms) * 0.2))  # 最後の20%
+        features['last_20_percent_volume'] = np.mean(rms[-end_portion:])
+        features['last_20_percent_drop_rate'] = (features['mean_volume'] - features['last_20_percent_volume']) / features['mean_volume'] if features['mean_volume'] > 0 else 0
+        
+        # MFCC特徴量（音声の音色特性）
+        mfccs = librosa.feature.mfcc(y=audio_data, sr=sr, n_mfcc=13)
+        for i in range(len(mfccs)):
+            features[f'mfcc_{i+1}_mean'] = np.mean(mfccs[i])
+            features[f'mfcc_{i+1}_std'] = np.std(mfccs[i])
+        
+        # スペクトル特性
+        spectral_centroid = librosa.feature.spectral_centroid(y=audio_data, sr=sr)[0]
+        features['spectral_centroid_mean'] = np.mean(spectral_centroid)
+        
+        # 音声のペース（オンセット検出で音節を近似）
+        onset_env = librosa.onset.onset_strength(y=audio_data, sr=sr)
+        onsets = librosa.onset.onset_detect(onset_envelope=onset_env, sr=sr)
+        features['onset_count'] = len(onsets)
+        features['speech_rate'] = len(onsets) / (len(audio_data) / sr) if len(audio_data) > 0 else 0
+        
+        return features
+
 class VoiceQualityModel:
     """音声品質を評価する機械学習モデル"""
 
@@ -76,71 +126,66 @@ class VoiceQualityModel:
         self.is_trained = True
 
         return True
-def predict(self, features_dict):
-    """音声品質を予測する"""
-    if not self.is_trained or self.model is None:
-        return None, 0
     
-    # 特徴量配列を作成
-    features = self.prepare_features(features_dict)
-    
-    # 特徴量を2次元配列に変換（sklearn要件）
-    features_2d = np.array([features])
-    
-    # 特徴量を標準化
-    features_scaled = self.scaler.transform(features_2d)
-    
-    # 予測実行
-    prediction = self.model.predict(features_scaled)[0]
-    
-    # 予測確率（信頼度）を取得
-    probabilities = self.model.predict_proba(features_scaled)[0]
-    confidence = np.max(probabilities)
-    
-    return prediction, confidence
+    def predict(self, features_dict):
+        """音声品質を予測する"""
 
-def save_model(self, file_path):
-    """モデルを保存する"""
-    if not self.is_trained or self.model is None:
-        return False
+        if not self.is_trained or self.model is None:
+            return None, 0
     
-    # モデル情報を辞書にまとめる
-    model_info = {
-        'model': self.model,
-        'scaler': self.scaler,
-        'is_trained': self.is_trained,
-        'classes': self.classes
-    }
+        # 特徴量配列を作成
+        features = self.prepare_features(features_dict)
     
-    # ファイルに保存
-    joblib.dump(model_info, file_path)
-    return True
+        # 特徴量を2次元配列に変換（sklearn要件）
+        features_2d = np.array([features])
+    
+        # 特徴量を標準化
+        features_scaled = self.scaler.transform(features_2d)
+    
+        # 予測実行
+        prediction = self.model.predict(features_scaled)[0]
+    
+        # 予測確率（信頼度）を取得
+        probabilities = self.model.predict_proba(features_scaled)[0]
+        confidence = np.max(probabilities)
+    
+        return prediction, confidence
 
-def load_model(self, file_path):
-    """保存されたモデルを読み込む"""
-    try:
-        # ファイルからモデル情報を読み込む
-        model_info = joblib.load(file_path)
-        
-        # モデル情報を復元
-        self.model = model_info['model']
-        self.scaler = model_info['scaler']
-        self.is_trained = model_info['is_trained']
-        self.classes = model_info['classes']
-        
+    def save_model(self, file_path):
+        """モデルを保存する"""
+        if not self.is_trained or self.model is None:
+            # モデルが訓練されていない場合や存在しない場合は保存しない
+            return False
+    
+        # モデル情報を辞書にまとめる
+        model_info = {
+            'model': self.model,
+            'scaler': self.scaler,
+            'is_trained': self.is_trained,
+            'classes': self.classes
+            }
+    
+        # ファイルに保存
+        joblib.dump(model_info, file_path)
         return True
-    except Exception as e:
-        print(f"モデル読み込みエラー: {e}")
-        return False
 
-
-        # ランダムフォレストモデルのトレーニング
-        self.model = RandomForestClassifier(n_estimators=100, random_state=42)
-        self.model.fit(X_scaled, y)
+    def load_model(self, file_path):
+        """保存されたモデルを読み込む"""
+        try:
+            # ファイルからモデル情報を読み込む
+            model_info = joblib.load(file_path)
         
-        # クラスラベルの保存
-        self.classes = np.unique(y)
-        self.is_trained = True    
+            # モデル情報を復元
+            self.model = model_info['model']
+            self.scaler = model_info['scaler']
+            self.is_trained = model_info['is_trained']
+            self.classes = model_info['classes']
+        
+            return True
+        except Exception as e:
+            print(f"モデル読み込みエラー: {e}")
+            return False
+ 
 
 def generate_training_data():
     """機械学習用のシミュレーションデータを生成する関数"""
@@ -887,6 +932,10 @@ def main():
                         tmp_file.write(uploaded_file.getvalue())
                         tmp_file_path = tmp_file.name
                 
+                except Exception as e:
+                    st.error(f"ファイル保存中にエラーが発生しました: {e}")
+                    st.stop()
+                
                     # 音声ファイルを再生可能に表示
                     st.audio(tmp_file_path, format='audio/wav')    
                            
@@ -1024,64 +1073,65 @@ def main():
                         
                     st.markdown('</div>', unsafe_allow_html=True)
 
+
             #機械学習モデルによる予測
             if st.session_state.model_trained:
                 try:
-                            prediction,confidence = st.session_state.ml_model.predict(features)
-                            st.markdown('<h2 class="sub-header">機械学習モデルによる音声品質予測</h2>', unsafe_allow_html=True)
+                    prediction,confidence = st.session_state.ml_model.predict(features)
+                    st.markdown('<h2 class="sub-header">機械学習モデルによる音声品質予測</h2>', unsafe_allow_html=True)
                            
-                            col1, col2 = st.columns(2)
+                    col1, col2 = st.columns(2)
                            
-                            with col1:
-                                st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                                st.metric("音声品質", prediction)
-                                st.metric("予測信頼度", f"{confidence:.2f}")
-                                st.markdown('</div>', unsafe_allow_html=True)
+                    with col1:
+                        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                        st.metric("音声品質", prediction)
+                        st.metric("予測信頼度", f"{confidence:.2f}")
+                        st.markdown('</div>', unsafe_allow_html=True)
                             
-                            with col2:
-                                st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                                st.subheader("AIによるアドバイス")
+                    with col2:
+                        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                        st.subheader("AIによるアドバイス")
             
-                            if prediction == "良好":
-                                st.success("発話は良好です！文末まで明瞭に話せています。")
-                                st.write("この調子で続けましょう。")
-                            elif prediction == "文末が弱い":
-                                st.warning("文末の音量が低下しています。")
-                                st.write("日本語は文末に重要情報が来ることが多いので、文末まで意識して話すと良いでしょう。")
-                                st.write("- 息を深く吸ってから話し始める")
-                                st.write("- 文の終わりまで十分な息を残しておく")
-                                st.write("- 文末を少し強調する意識を持つ")
-                            elif prediction == "小声すぎる":
-                                st.warning("全体的に声が小さいです。")
-                                st.write("相手に届くよう、もう少し声量を上げると良いでしょう。")
-                                st.write("- 腹式呼吸を意識する")
-                                st.write("- 少し大きめの声を出す練習をする")
-            
-                            st.markdown('</div>', unsafe_allow_html=True)
-                except Exception as e:
-                    st.error(f"予測エラー: {e}")
+                        if prediction == "良好":
+                            st.success("発話は良好です！文末まで明瞭に話せています。")
+                            st.write("この調子で続けましょう。")
+                        elif prediction == "文末が弱い":
+                             st.warning("文末の音量が低下しています。")
+                             st.write("日本語は文末に重要情報が来ることが多いので、文末まで意識して話すと良いでしょう。")
+                             st.write("- 息を深く吸ってから話し始める")
+                             st.write("- 文の終わりまで十分な息を残しておく")
+                             st.write("- 文末を少し強調する意識を持つ")
+                        elif prediction == "小声すぎる":
+                             st.warning("全体的に声が小さいです。")
+                             st.write("相手に届くよう、もう少し声量を上げると良いでしょう。")
+                             st.write("- 腹式呼吸を意識する")
+                             st.write("- 少し大きめの声を出す練習をする")
+                        st.markdown('</div>', unsafe_allow_html=True)
                             
-                # 次のステップ: 録音してご自身の声を聴くことで、話し方を確認しましょう。
-                st.write("- 次のステップ: 録音してご自身の声を聴くことで、話し方を確認しましょう。")
-                st.markdown('</div>', unsafe_allow_html=True)              
+                    # 次のステップ: 録音してご自身の声を聴くことで、話し方を確認しましょう。
+                    st.write("- 次のステップ: 録音してご自身の声を聴くことで、話し方を確認しましょう。")
+                    st.markdown('</div>', unsafe_allow_html=True)    
 
-                
+                except Exception as e:
+                    st.error(f"機械学習モデルによる予測中にエラーが発生しました: {e}")
+
                 # 一時ファイルを削除
                 os.remove(tmp_file_path)
                 st.success("分析が完了しました！")
+
                         
-            except Exception as e:
                 # エラー処理
-            error_msg =str(e)
-                
-            if "PySoundFile" in error_msg:
-                st.error("音声ファイルの形式が正しくありません。別のwavまたはmp3形式のファイルをお試しください。")
-            elif "empty_file" in error_msg:
-                st.error("アップロードがいるされた音声ファイルが空です。有効な音声ファイルをアップロードしてください。")
-            else:
-                st.error(f"音声分析中にエラーが発生しました: {e}")
+                error_msg = str(e)
+
+                if "PySoundFile" in error_msg:
+                    st.error("音声ファイルの形式が正しくありません。別のwavまたはmp3形式のファイルをお試しください。")
+                elif "empty_file" in error_msg:
+                    st.error("アップロードがいるされた音声ファイルが空です。有効な音声ファイルをアップロードしてください。")
+                else:
+                    st.error(f"音声分析中にエラーが発生しました: {error_msg}")
+            
             try:
-                os.unlink(tmp_file_path)
+                 os.unlink(tmp_file_path)
             except:
                 pass
                     
