@@ -927,71 +927,77 @@ def main():
             
             if uploaded_file is not None:
                 try:
+                    tmp_file_path = None  # 初期値を設定
+
                     # 一時ファイルとして保存
+                    tmp_file_path = None               
                     with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_file:
                         tmp_file.write(uploaded_file.getvalue())
                         tmp_file_path = tmp_file.name
-                
+
                 except Exception as e:
-                    st.error(f"ファイル保存中にエラーが発生しました: {e}")
-                    st.stop()
+                        st.error(f"ファイル保存中にエラーが発生しました: {e}")
+                        st.stop()
+
+                # 音声ファイルの長さをチェック
+                audio_length = librosa.get_duration(filename=tmp_file_path)
+
+                # 音声ファイルを再生可能に表示
+                st.audio(tmp_file_path, format='audio/wav')
+
+                # 音声データの読み込み
+                y, sr = librosa.load(tmp_file_path, sr=None)
+
+                # 音声特徴量の抽出
+                features = feature_extractor.extract_features(y, sr)
                 
-                    # 音声ファイルを再生可能に表示
-                    st.audio(tmp_file_path, format='audio/wav')    
-                           
-                    # 音声データの読み込み
-                    y, sr = librosa.load(tmp_file_path, sr=None)
+                # 音声分析の視覚化
+                st.subheader("音声分析結果")    
+                fig = plot_audio_analysis(features, y, sr)
+                st.pyplot(fig)
                 
-                    # 音声特徴量の抽出
-                    features = feature_extractor.extract_features(y, sr)
-                
-                    # 音声分析の視覚化
-                    st.subheader("音声分析結果")    
-                    fig = plot_audio_analysis(features, y, sr)
-                    st.pyplot(fig)
-                
-                    # 音量分析結果の表示
-                    st.markdown('<h2 class="sub-header">音量分析結果</h2>', unsafe_allow_html=True)
+                # 音量分析結果の表示
+                st.markdown('<h2 class="sub-header">音量分析結果</h2>', unsafe_allow_html=True)
                         
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        # フィードバックの表示
-                        st.markdown('<div class="info-box">', unsafe_allow_html=True)
-                        st.metric("平均音量", f"{features['mean_volume']:.4f}")
-                        st.metric("文頭音量", f"{features['start_volume']:.4f}")
-                        st.markdown('</div>', unsafe_allow_html=True)
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    # フィードバックの表示
+                    st.markdown('<div class="info-box">', unsafe_allow_html=True)
+                    st.metric("平均音量", f"{features['mean_volume']:.4f}")
+                    st.metric("文頭音量", f"{features['start_volume']:.4f}")
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                with col2:
+                    st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                    st.metric("文中音量", f"{features['middle_volume']:.4f}")
+                    st.metric("文末音量", f"{features['end_volume']:.4f}")
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                with col3:
+                    st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                    st.metric("文末音量低下率", f"{features['end_drop_rate']:.4f}")
+                    st.metric("文末音量低下率(最後の20%)", f"{features['last_20_percent_drop_rate']:.4f}")
+                    st.markdown('</div>', unsafe_allow_html=True)
                     
-                    with col2:
-                        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                        st.metric("文中音量", f"{features['middle_volume']:.4f}")
-                        st.metric("文末音量", f"{features['end_volume']:.4f}")
-                        st.markdown('</div>', unsafe_allow_html=True)
+                # 音声明瞭度評価
+                evaluation = evaluate_clarity(features)
+                
+                st.markdown('<h2 class="sub-header">音声明瞭度評価</h2>', unsafe_allow_html=True)
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown('<div class="info-box">', unsafe_allow_html=True)
+                    st.metric("明瞭度スコア", f"{evaluation['score']}/100")
+                    st.metric("明瞭度評価", evaluation['clarity_level'])
+                    st.metric("スコア", f"{evaluation['score']}点")
+                    st.markdown('</div>', unsafe_allow_html=True)
                     
-                    with col3:
-                        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                        st.metric("文末音量低下率", f"{features['end_drop_rate']:.4f}")
-                        st.metric("文末音量低下率(最後の20%)", f"{features['last_20_percent_drop_rate']:.4f}")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                        
-                    # 音声明瞭度評価
-                    evaluation = evaluate_clarity(features)
-                    
-                    st.markdown('<h2 class="sub-header">音声明瞭度評価</h2>', unsafe_allow_html=True)
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown('<div class="info-box">', unsafe_allow_html=True)
-                        st.metric("明瞭度スコア", f"{evaluation['score']}/100")
-                        st.metric("明瞭度評価", evaluation['clarity_level'])
-                        st.metric("スコア", f"{evaluation['score']}点")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                        
-                    with col2:
-                        st.markdown('<div class="info-box">', unsafe_allow_html=True)
-                        st.write("アドバイス")
-                        st.write(evaluation['advice'])
-                        st.markdown('</div>', unsafe_allow_html=True)
+                with col2:
+                    st.markdown('<div class="info-box">', unsafe_allow_html=True)
+                    st.write("アドバイス")
+                    st.write(evaluation['advice'])
+                    st.markdown('</div>', unsafe_allow_html=True)
 
                     # 詳細な特徴量表示（オプション）
                     if st.checkbox("詳細な特徴量を表示"):
@@ -1075,9 +1081,10 @@ def main():
 
 
             #機械学習モデルによる予測
-            if st.session_state.model_trained:
+            if st.session_state.model_trained and 'features' in locals():
                 try:
                     prediction,confidence = st.session_state.ml_model.predict(features)
+                    
                     st.markdown('<h2 class="sub-header">機械学習モデルによる音声品質予測</h2>', unsafe_allow_html=True)
                            
                     col1, col2 = st.columns(2)
@@ -1104,7 +1111,7 @@ def main():
                         elif prediction == "小声すぎる":
                              st.warning("全体的に声が小さいです。")
                              st.write("相手に届くよう、もう少し声量を上げると良いでしょう。")
-                             st.write("- 腹式呼吸を意識する")
+                             st.write("- 呼吸を少しだけ意識しましょう")
                              st.write("- 少し大きめの声を出す練習をする")
                         st.markdown('</div>', unsafe_allow_html=True)
                             
@@ -1113,13 +1120,21 @@ def main():
                     st.markdown('</div>', unsafe_allow_html=True)    
 
                 except Exception as e:
-                    st.error(f"機械学習モデルによる予測中にエラーが発生しました: {e}")
+                    st.error(f"機械学習による予測中にエラーが発生しました: {e}")
+            else:    
+                if not st.session_state.model_trained:
+                    st.info("機械学習モデルが初期化されていません。")
+                elif 'features' not in locals():
+                    st.info("音声特徴量が抽出されていません。音声を再度アップロードしてください")
+                    
+                    # 最後に一時ファイルを削除（必要に応じて）                   
+                    if 'tmp_file_path' in locals() and os.path.exists(tmp_file_path):
+                        try:
+                            os.remove(tmp_file_path)
+                        except Exception as e:
+                            logger.warning(f"一時ファイルの削除に失敗: {e}") 
 
-                # 一時ファイルを削除
-                os.remove(tmp_file_path)
-                st.success("分析が完了しました！")
-
-                        
+                       
                 # エラー処理
                 error_msg = str(e)
 
