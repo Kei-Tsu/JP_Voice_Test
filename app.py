@@ -940,7 +940,7 @@ def main():
                         st.stop()
 
                 # 音声ファイルの長さをチェック
-                audio_length = librosa.get_duration(filename=tmp_file_path)
+                audio_length = librosa.get_duration(path=tmp_file_path)
 
                 # 音声ファイルを再生可能に表示
                 st.audio(tmp_file_path, format='audio/wav')
@@ -1133,18 +1133,21 @@ def main():
                             os.remove(tmp_file_path)
                         except Exception as e:
                             logger.warning(f"一時ファイルの削除に失敗: {e}") 
-
                        
-                # エラー処理
-                error_msg = str(e)
+            # エラー処理
+            try:
+                if 'e' in locals():
+                    error_msg = str(e)
 
-                if "PySoundFile" in error_msg:
-                    st.error("音声ファイルの形式が正しくありません。別のwavまたはmp3形式のファイルをお試しください。")
-                elif "empty_file" in error_msg:
-                    st.error("アップロードがいるされた音声ファイルが空です。有効な音声ファイルをアップロードしてください。")
-                else:
-                    st.error(f"音声分析中にエラーが発生しました: {error_msg}")
-            
+                    if "PySoundFile" in str(e):
+                        st.error("音声ファイルの形式が正しくありません。別のwavまたはmp3形式のファイルをお試しください。")
+                    elif "empty_file" in str(e):
+                        st.error("アップロードがいるされた音声ファイルが空です。有効な音声ファイルをアップロードしてください。")
+                    else:
+                        st.error(f"音声分析中にエラーが発生しました: {error_msg}")
+            except Exception:
+                st.error("音声分析中にエラーが発生しました。")
+
             try:
                  os.unlink(tmp_file_path)
             except:
