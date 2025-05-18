@@ -78,96 +78,96 @@ class VoiceQualityModel:
 
         return features
 
-def train(self, X, y):
-    """モデルを訓練する"""
-    try:
-        import streamlit as st
+    def train(self, X, y):
+        """モデルを訓練する"""
+        try:
+            import streamlit as st
 
-        # ストリームリットのセッション状態を使用して進捗を表示
-        st.write(f"**訓練データ詳細**")
-        st.write(f"- 総サンプル数: {len(X)}")
+            # ストリームリットのセッション状態を使用して進捗を表示
+            st.write(f"**訓練データ詳細**")
+            st.write(f"- 総サンプル数: {len(X)}")
 
-        # 各クラスの数を確認
-        unique_labels, counts = np.unique(y, return_counts=True)
-        st.write("- クラス別データ数:")
-        for label, count in zip(unique_labels, counts):
-            st.write(f"  - {label}: {count}個")
+            # 各クラスの数を確認
+            unique_labels, counts = np.unique(y, return_counts=True)
+            st.write("- クラス別データ数:")
+            for label, count in zip(unique_labels, counts):
+                st.write(f"  - {label}: {count}個")
         
-        # データの検証
-        if len(X) == 0 or len(y) == 0:
-            st.error("訓練データが空です")
-            logger.error("訓練データが空です")
-            return False
+            # データの検証
+            if len(X) == 0 or len(y) == 0:
+                st.error("訓練データが空です")
+                logger.error("訓練データが空です")
+                return False
 
 
-        # NaNや無限大値の処理
-        X_clean = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
-        st.write(f"データクリーニング完了: {X_clean.shape}")
+            # NaNや無限大値の処理
+            X_clean = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+            st.write(f"データクリーニング完了: {X_clean.shape}")
 
 
-        # データの標準化
-        X_scaled = self.scaler.fit_transform(X_clean)
-        st.write(f"特徴量の標準化完了")
+            # データの標準化
+            X_scaled = self.scaler.fit_transform(X_clean)
+            st.write(f"特徴量の標準化完了")
 
 
-        # ランダムフォレスト分類器を作成
-        self.model = RandomForestClassifier(
-            n_estimators=100,  # 決定木の数
-            max_depth=10,      # 木の最大深さ
-            random_state=42,   # 再現性のための乱数シード
-            n_jobs=-1          # 並列処理を使用
-        )
-        st.write(f"ランダムフォレストモデル作成: 100本の決定木を準備")
+            # ランダムフォレスト分類器を作成
+            self.model = RandomForestClassifier(
+                n_estimators=100,  # 決定木の数
+                max_depth=10,      # 木の最大深さ
+                random_state=42,   # 再現性のための乱数シード
+                n_jobs=-1          # 並列処理を使用
+            )
+            st.write(f"ランダムフォレストモデル作成: 100本の決定木を準備")
 
 
-        # モデルの訓練
-        st.write("**学習を開始しています...**")
-        self.model.fit(X_scaled, y)
-        st.write("**学習完了！**")
+            # モデルの訓練
+            st.write("**学習を開始しています...**")
+            self.model.fit(X_scaled, y)
+            st.write("**学習完了！**")
 
 
-        # 訓練データでの精度を確認
-        train_accuracy = self.model.score(X_scaled, y)
-        st.success(f"訓練データでの精度: {train_accuracy:.1%}")
+            # 訓練データでの精度を確認
+            train_accuracy = self.model.score(X_scaled, y)
+            st.success(f"訓練データでの精度: {train_accuracy:.1%}")
 
 
-        # クラスのリストを保存
-        self.classes = self.model.classes_
-        st.write(f"学習したクラス: {list(self.classes)}")
+            # クラスのリストを保存
+            self.classes = self.model.classes_
+            st.write(f"学習したクラス: {list(self.classes)}")
 
 
-        # 特徴量の重要度を取得
-        importances = self.model.feature_importances_
-        if self.feature_names is None:
-            feature_names = [
-                '平均音量', '音量変動', '文頭音量', '文中音量', '文末音量',
-                '音量低下率', '最後20%音量', '最後20%低下率', 'スペクトル重心', '話速'
+            # 特徴量の重要度を取得
+            importances = self.model.feature_importances_
+            if self.feature_names is None:
+                feature_names = [
+                    '平均音量', '音量変動', '文頭音量', '文中音量', '文末音量',
+                    '音量低下率', '最後20%音量', '最後20%低下率', 'スペクトル重心', '話速'
             ]
-        else:
-            feature_names = self.feature_names
+            else:
+                feature_names = self.feature_names
 
 
-        st.write("**特徴量の重要度:**")
-        importance_data = []
-        for name, importance in zip(feature_names[:len(importances)], importances):
-            importance_data.append([name, f"{importance:.3f}"])
+            st.write("**特徴量の重要度:**")
+            importance_data = []
+            for name, importance in zip(feature_names[:len(importances)], importances):
+                importance_data.append([name, f"{importance:.3f}"])
 
             
-        # 表形式で表示
-        importance_df = pd.DataFrame(importance_data, columns=['特徴量', '重要度'])
-        st.dataframe(importance_df)
+            # 表形式で表示
+            importance_df = pd.DataFrame(importance_data, columns=['特徴量', '重要度'])
+            st.dataframe(importance_df)
 
 
-        # 訓練済みフラグを設定
-        self.is_trained = True
+            # 訓練済みフラグを設定
+            self.is_trained = True
 
-        logger.info(f"モデル訓練完了: {len(X)}サンプル, {len(self.classes)}クラス")
-        return True
+            logger.info(f"モデル訓練完了: {len(X)}サンプル, {len(self.classes)}クラス")
+            return True
 
-    except Exception as e:
-        st.logger.error(f"モデル訓練エラー: {e}")
-        logger
-        return False
+        except Exception as e:
+            st.logger.error(f"モデル訓練エラー: {e}")
+            logger.error(f"モデル訓練エラー: {e}")
+            return False
     
     def predict(self, features_dict, realtime=False):
         """音声品質を予測する"""
