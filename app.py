@@ -326,6 +326,7 @@ def main():
             )
             
             if uploaded_file is not None:
+                tmp_file_path = None  # 変数を事前に初期化
                 try:
                     # 一時ファイルとして保存
                     with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_file:
@@ -392,10 +393,14 @@ def main():
 
                 except Exception as e:
                     st.error(f"音声分析中にエラーが発生しました: {e}")
-                    try:
-                        os.unlink(tmp_file_path)
-                    except:
-                        pass
+                finally:
+                    # 一時ファイルの削除
+                    if tmp_file_path is not None and os.path.exists(tmp_file_path):
+                        try:
+                            os.unlink(tmp_file_path)
+                        except Exception as e:
+                            logger.error(f"一時ファイル削除エラー: {e}")
+                            
         elif practice_method == "リアルタイム評価" and WEBRTC_AVAILABLE:
             st.write("### リアルタイム評価")
             st.info("「START」ボタンをクリックし、ブラウザからのマイク使用許可を承認してください。")
