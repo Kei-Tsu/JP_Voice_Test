@@ -45,7 +45,7 @@ class VoiceQualityModel:
     
             return features
         
-        # 特徴量名を記録（初回のみ）
+        # 特徴量名を記録（初回のみ適用）
         if self.feature_names is None:
             self.feature_names = feature_keys
 
