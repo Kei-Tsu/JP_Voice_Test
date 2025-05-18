@@ -14,7 +14,7 @@ import logging
 from pydub import AudioSegment
 
 #機械学習関連のインポート
-from ml_model import VoiceQualityModel, generate_training_data, create_dataset_from_files
+from ml_model import VoiceQualityModel, generate_training_data
 
 # 音声分析関連のインポート
 from voice_analysis import VoiceFeatureExtractor, plot_audio_analysis, evaluate_clarity, get_feedback
@@ -36,7 +36,7 @@ try:
     WEBRTC_AVAILABLE = True# ブラウザで音声を録音するためのライブラリ
 except ImportError:
     WEBRTC_AVAILABLE = False
-    st.error("streamlit-webrtcライブラリがインストールされていません。'pip install streamlit-webrtc'でインストールしてください。")
+    st.sidebar.warning("streamlit-webrtcライブラリがインストールされていません。'pip install streamlit-webrtc'でインストールしてください。")
     # ダミー関数を定義（エラーを防ぐため）
     def webrtc_streamer(*args, **kwargs):
         return None
@@ -48,7 +48,6 @@ except ImportError:
 
 import av
 import scipy.io.wavfile
-import logging
 
 # セッション状態の初期化
 if 'volume_history' not in st.session_state:
@@ -85,6 +84,7 @@ if 'analysis_complete' not in st.session_state:
 if 'last_analysis' not in st.session_state:
     st.session_state.last_analysis = None  # 最後の分析結果
 
+
 # アプリケーション設定
 st.set_page_config(
     page_title="語尾までしっかりマスター",
@@ -92,6 +92,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
 
 # カスタムCSS（アプリのUI）
 st.markdown("""
@@ -189,7 +190,7 @@ def display_feedback_history(placeholder):
             placeholder.markdown(
                 f"<div class='{css_class}'>"
                 f"<p>{feedback['time']} - {feedback['emoji']} {feedback['message']}</p>"
-                f"<p>文末音量低下率: {feedback['drop_rate']:.2f}</p>"
+                f"<p>文末の音量低下率: {feedback['drop_rate']:.2f}</p>"
                 f"</div>",
                 unsafe_allow_html=True
             )
@@ -455,15 +456,22 @@ def main():
                 X, y = generate_training_data()
 
                 # モデルの初期化と訓練
-                model = VoiceQualityModel()
-                model.train(X, y)
+                if st.session_state.ml_model.train(X, y):
+                    st.session_state.model_trained = True
+                    st.success("モデルの訓練が完了しました")
 
-                # モデルの保存
-                st.session_state.ml_model = model
-                st.session_state.model_trained = True
-
-                st.success("モデルの訓練が完了しました")
+                    # 特徴量の重要度を表示
+                    importance = st.session_state.ml_model.get_feature_importance()
+                    if importance:
+                        st.subheader("特徴量の重要度")
+                        importance_df = pd.DataFrame(
+                            list(importance.items()), 
+                            columns=['特徴量', '重要度']
+                        ).sort_values('重要度', ascending=False)
+                        st.bar_chart(importance_df.set_index('特徴量'))
+                else:
+                    st.error("モデルの訓練に失敗しました")
 
 # アプリの実行
 if __name__ == "__main__":
-    main()
+    main()  
