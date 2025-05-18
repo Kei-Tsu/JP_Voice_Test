@@ -36,7 +36,6 @@ try:
     WEBRTC_AVAILABLE = True# ブラウザで音声を録音するためのライブラリ
 except ImportError:
     WEBRTC_AVAILABLE = False
-    st.sidebar.warning("streamlit-webrtcライブラリがインストールされていません。'pip install streamlit-webrtc'でインストールしてください。")
     # ダミー関数を定義（エラーを防ぐため）
     def webrtc_streamer(*args, **kwargs):
         return None
@@ -46,8 +45,13 @@ except ImportError:
         def __init__(self, *args, **kwargs):
             pass
 
-import av
-import scipy.io.wavfile
+
+try:
+    import av
+    import scipy.io.wavfile
+except ImportError:
+    pass
+
 
 # セッション状態の初期化
 if 'volume_history' not in st.session_state:
@@ -162,12 +166,14 @@ CONVERSATION_SAMPLES = {
     ]
 }
 
+
 # リアルタイム音量メーターの表示
 def display_volume_meter(placeholder):
     if len(st.session_state.volume_history) > 0:
         df = pd.DataFrame(st.session_state.volume_history)
         df = df.reset_index().rename(columns={"index": "時間"})
         
+
         chart = alt.Chart(df).mark_line().encode(
             x=alt.X("時間", axis=None),
             y=alt.Y("音量", title="音量 (dB)", scale=alt.Scale(domain=[-80, 0]))
@@ -176,7 +182,9 @@ def display_volume_meter(placeholder):
             width='container'
         )
         
+
         placeholder.altair_chart(chart, use_container_width=True)
+
 
 # フィードバック履歴の表示
 def display_feedback_history(placeholder):
@@ -388,19 +396,55 @@ def main():
                         st.write(evaluation['advice'])
                         st.markdown('</div>', unsafe_allow_html=True)
 
-                    # 一時ファイルを削除
-                    os.unlink(tmp_file_path)
+                    # 機械学習による予測（モデルが訓練済みの場合）
+                    if st.session_state.model_trained:
+                        try:
+                            prediction, confidence = st.session_state.ml_model.predict(features)
+                            
+                            if prediction is not None:
+                                st.markdown('<h2 class="sub-header">機械学習による予測</h2>', unsafe_allow_html=True)
+                                
+                                col1, col2 = st.columns(2)
+                                
+                                with col1:
+                                    st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                                    st.metric("予測結果", prediction)
+                                    st.metric("信頼度", f"{confidence:.2f}")
+                                    st.markdown('</div>', unsafe_allow_html=True)
+                                
+                                with col2:
+                                    st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                                    st.subheader("AIによるアドバイス")
+                                    
+                                    if prediction == "良好":
+                                        st.success("発話は良好です！この調子を維持しましょう。")
+                                    elif prediction == "文末が弱い":
+                                        st.warning("文末の音量が低下しています。文末まで意識して話しましょう。")
+                                    elif prediction == "小声すぎる":
+                                        st.warning("全体的に声が小さいです。もう少し声量を上げると良いでしょう。")
+                                    
+                                    st.markdown('</div>', unsafe_allow_html=True)
+                        
+                        except Exception as ml_error:
+                            st.error(f"機械学習による予測中にエラーが発生しました: {ml_error}")
+                    else:
+                        st.info("機械学習モデルがまだ訓練されていません。「モデル訓練」ページで訓練を実行してください。")
+
+                    st.success("分析が完了しました！")
 
                 except Exception as e:
                     st.error(f"音声分析中にエラーが発生しました: {e}")
+                    logger.error(f"音声分析エラー: {e}", exc_info=True)
+
                 finally:
-                    # 一時ファイルの削除
+                    # 一時ファイルを削除
                     if tmp_file_path is not None and os.path.exists(tmp_file_path):
                         try:
                             os.unlink(tmp_file_path)
-                        except Exception as e:
-                            logger.error(f"一時ファイル削除エラー: {e}")
-                            
+                        except Exception as cleanup_error:
+                            logger.warning(f"一時ファイル削除エラー: {cleanup_error}")
+                    st.session_state.recording = False
+
         elif practice_method == "リアルタイム評価" and WEBRTC_AVAILABLE:
             st.write("### リアルタイム評価")
             st.info("「START」ボタンをクリックし、ブラウザからのマイク使用許可を承認してください。")
@@ -443,8 +487,12 @@ def main():
                 else:
                     status_placeholder.warning("マイク接続待機中...「START」ボタンをクリックしてください。")
 
-            except Exception as e:
-                st.error(f"リアルタイム機能でエラーが発生しました: {e}")
+            except Exception as webrtc_error:
+                st.error(f"WebRTC接続中にエラーが発生しました: {webrtc_error}")
+                logger.error(f"WebRTCエラー: {webrtc_error}", exc_info=True)
+
+            finally:
+                st.session_state.recording = False
 
     # モデル訓練ページ
     elif page == "モデル訓練":
@@ -460,7 +508,7 @@ def main():
                 # シミュレーションデータの生成
                 X, y = generate_training_data()
 
-                # モデルの初期化と訓練
+                # モデルの訓練
                 if st.session_state.ml_model.train(X, y):
                     st.session_state.model_trained = True
                     st.success("モデルの訓練が完了しました")
@@ -477,6 +525,21 @@ def main():
                 else:
                     st.error("モデルの訓練に失敗しました")
 
+def cleanup():
+    """アプリケーション終了時のクリーンアップ処理"""
+    if st.session_state.get('temp_audio_file') and os.path.exists(st.session_state.temp_audio_file):
+        try:
+            os.unlink(st.session_state.temp_audio_file)
+        except Exception as e:
+            logger.warning(f"一時ファイルクリーンアップエラー: {e}")
+
 # アプリの実行
 if __name__ == "__main__":
-    main()  
+    try:
+        main()
+    except Exception as app_error:
+        st.error(f"アプリケーションでエラーが発生しました: {app_error}")
+        logger.error(f"アプリケーションエラー: {app_error}", exc_info=True)
+    finally:
+        cleanup()
+        # クリーンアップ処理    
