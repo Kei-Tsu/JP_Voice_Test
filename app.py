@@ -229,7 +229,7 @@ def audio_frame_callback(frame):
             if db > silence_threshold:
                 st.session_state.last_sound_time = time.time()
                 st.session_state.end_of_sentence_detected = False
-            else:
+                st.error("モデル訓練に失敗しました")                
                 # 無音状態の処理
                 current_time = time.time()
                 silence_duration = (current_time - st.session_state.last_sound_time) * 1000
@@ -323,6 +323,7 @@ def main():
         if WEBRTC_AVAILABLE:
             practice_method = st.radio("練習方法を選択", ["音声ファイルをアップロード", "リアルタイム評価"])
         else:
+            pass
             practice_method = st.radio("練習方法を選択", ["音声ファイルをアップロード"])
             st.info("リアルタイム評価を使用するには、streamlit-webrtcをインストールしてください。")
 
@@ -376,59 +377,123 @@ def main():
                         st.metric("文末音量低下率", f"{features['end_drop_rate']:.4f}")
                         st.metric("文末音量低下率(最後の20%)", f"{features['last_20_percent_drop_rate']:.4f}")
                         st.markdown('</div>', unsafe_allow_html=True)
-
-                    # 音声明瞭度評価
-                    evaluation = evaluate_clarity(features)
+        
+                    # === ここから新しい分析結果表示 ===
+                    st.markdown('<h2 class="sub-header">総合分析結果</h2>', unsafe_allow_html=True)
                     
-                    st.markdown('<h2 class="sub-header">音声明瞭度評価</h2>', unsafe_allow_html=True)
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown('<div class="info-box">', unsafe_allow_html=True)
-                        st.metric("明瞭度スコア", f"{evaluation['score']}/100")
-                        st.metric("明瞭度評価", evaluation['clarity_level'])
-                        st.markdown('</div>', unsafe_allow_html=True)
-                        
-                    with col2:
-                        st.markdown('<div class="info-box">', unsafe_allow_html=True)
-                        st.write("アドバイス")
-                        st.write(evaluation['advice'])
-                        st.markdown('</div>', unsafe_allow_html=True)
-
-                    # 機械学習による予測（モデルが訓練済みの場合）
-                    if st.session_state.model_trained:
+                    # 1. ルールベースの評価
+                    rule_based_evaluation = evaluate_clarity(features)
+        
+                    # 2. 機械学習による評価
+                    ml_available = st.session_state.model_trained
+        
+                    if ml_available:
                         try:
-                            prediction, confidence = st.session_state.ml_model.predict(features)
-                            
-                            if prediction is not None:
-                                st.markdown('<h2 class="sub-header">機械学習による予測</h2>', unsafe_allow_html=True)
-                                
-                                col1, col2 = st.columns(2)
-                                
-                                with col1:
-                                    st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                                    st.metric("予測結果", prediction)
-                                    st.metric("信頼度", f"{confidence:.2f}")
-                                    st.markdown('</div>', unsafe_allow_html=True)
-                                
-                                with col2:
-                                    st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                                    st.subheader("AIによるアドバイス")
-                                    
-                                    if prediction == "良好":
-                                        st.success("発話は良好です！この調子を維持しましょう。")
-                                    elif prediction == "文末が弱い":
-                                        st.warning("文末の音量が低下しています。文末まで意識して話しましょう。")
-                                    elif prediction == "小声すぎる":
-                                        st.warning("全体的に声が小さいです。もう少し声量を上げると良いでしょう。")
-                                    
-                                    st.markdown('</div>', unsafe_allow_html=True)
-                        
+                            ml_prediction, ml_confidence = st.session_state.ml_model.predict(features)
+                            ml_success = True
                         except Exception as ml_error:
-                            st.error(f"機械学習による予測中にエラーが発生しました: {ml_error}")
+                            ml_prediction, ml_confidence = None, 0
+                            ml_success = False
+                            st.error(f"機械学習予測エラー: {ml_error}")
                     else:
-                        st.info("機械学習モデルがまだ訓練されていません。「モデル訓練」ページで訓練を実行してください。")
+                        ml_prediction, ml_confidence = None, 0
+                        ml_success = False
+        
+                     # 結果の表示
+                    if ml_success and ml_available:
+                        # === 機械学習とルールベース両方の結果を表示 ===
+                        col1, col2 = st.columns(2)
+
+                        with col1:
+                            st.markdown("#### AI分析結果")
+                            st.markdown('<div class="info-box">', unsafe_allow_html=True)
+
+                            #　結果に応じた色分け
+                            if ml_prediction == "良好":
+                                st.success(f"**予測結果: {ml_prediction}**")
+                            elif ml_prediction == "文末が弱い":
+                                st.warning(f"**予測結果: {ml_prediction}**")
+                            else:
+                                st.info(f"**予測結果: {ml_prediction}**")
+
+                            st.metric("予測信頼度", ml_confidence)
+
+                            # AIからの具体的なアドバイス
+                            st.write("**AIのアドバイス:**")
+                            if ml_prediction == "良好です":
+                                st.write("良い発話です！語尾までしっかりと、相手に結論まで伝わりやすい話し方です。")
+                            elif ml_prediction == "文末が弱目です":
+                                st.write("文末の音量が低下しています。日本語は文末が重要なことも多いので、最後まで意識しましょう。")
+                            elif ml_prediction == "小声すぎます":
+                                st.write("全体的に声のボリュームが小さめです。もう少しだけ声を張って話してみましょう。")
+                            else:
+                                st.write("普通の発話レベルです。さらなる改善の余地があります。")
+                
+                            st.markdown('</div>', unsafe_allow_html=True)
+
+                        with col2:
+                            st.markdown("#### ルールベース分析結果")
+                            st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                            
+                            # ルールベースの評価結果を表示 
+                            if rule_based_evaluation['clarity_level'] == "良好です":
+                                st.success(f"**評価: {rule_based_evaluation['clarity_level']}**")
+                            elif rule_based_evaluation['clarity_level'] in ["やや弱目です", "少しだけ頑張りましょう"]:
+                                st.warning(f"**評価: {rule_based_evaluation['clarity_level']}**")
+                            else:
+                                st.info(f"**評価: {rule_based_evaluation['clarity_level']}**")
+                
+                            st.metric("明瞭度スコア", f"{rule_based_evaluation['score']}/100")
+                
+                            st.write("**従来のアドバイス:**")
+                            st.write(rule_based_evaluation['advice'])
+
+                            st.markdown('</div>', unsafe_allow_html=True)
+
+            
+                        # === 比較セクション ===
+                        st.markdown("### 📊 分析手法の比較")
+            
+                        # どちらの方法が同じ結論に達したかを表示
+                        good_match = (ml_prediction == "良好" and rule_based_evaluation['clarity_level'] == "良好")
+                        weak_match = (ml_prediction == "文末が弱い" and rule_based_evaluation['clarity_level'] in ["やや弱い", "少し頑張りましょう"])
+                        
+                        if good_match or weak_match:
+                            st.success("AIとルールベース分析が同様の結論に達しました。信頼性が高い分析結果です。")
+                        else:
+                            st.info("AIとルールベース分析で異なる結果が出ました。複合的に判断してください。")
+            
+
+                        # 詳細比較表
+                        comparison_df = pd.DataFrame({
+                            '分析方法': ['AI（機械学習）', 'ルールベース'],
+                            '結果': [ml_prediction, rule_based_evaluation['clarity_level']],
+                            '信頼度/スコア': [f"{ml_confidence:.1%}", f"{rule_based_evaluation['score']}/100"],
+                            '特徴': ['訓練データから学習したパターンで判定', '音響特徴の直接的なルールで判定']
+                        })
+                        st.table(comparison_df)
+            
+                    else:
+                        # === ルールベースの結果のみ表示 ===
+                        st.markdown("#### ルールベース分析結果のみ")
+                        if not ml_available:
+                            st.warning("機械学習モデルが訓練されていません。「モデル訓練」ページで訓練を実行してください。")
+            
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                            st.metric("明瞭度スコア", f"{rule_based_evaluation['score']}/100")
+                            st.metric("評価レベル", rule_based_evaluation['clarity_level'])
+                            st.markdown('</div>', unsafe_allow_html=True)
+            
+                        with col2:
+                            st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+                            st.subheader("アドバイス")
+                            st.write(rule_based_evaluation['advice'])
+                            st.markdown('</div>', unsafe_allow_html=True)
+            
+                        # 機械学習のメリットを促すメッセージ
+                        st.info("**より正確な分析のために:** モデル訓練ページでAIを訓練すると、より精密な分析が可能になります。")
 
                     st.success("分析が完了しました！")
 
@@ -500,30 +565,94 @@ def main():
         
         st.write("""
         このページでは、機械学習モデルを訓練・評価することができます。
-        サンプルデータを使用してモデルを訓練します。
-        """)    
-       
-        if st.button("モデル訓練"):
-            with st.spinner("モデルを訓練中..."):
-                # シミュレーションデータの生成
-                X, y = generate_training_data()
+        シミュレーションデータを使用してモデルを訓練します。
+        """)
 
-                # モデルの訓練
-                if st.session_state.ml_model.train(X, y):
-                    st.session_state.model_trained = True
-                    st.success("モデルの訓練が完了しました")
+        # 訓練前の状態表示
+        if st.session_state.model_trained:
+            st.success("モデルは既に訓練済みです")
+            if st.button("再訓練する"):
+                st.session_state.model_trained = False
+                st.experimental_rerun()
+        else:
+            st.info("モデルはまだ訓練されていません")
+            st.write("訓練を開始するには、以下のボタンをクリックしてください。")
 
-                    # 特徴量の重要度を表示
-                    importance = st.session_state.ml_model.get_feature_importance()
-                    if importance:
-                        st.subheader("特徴量の重要度")
-                        importance_df = pd.DataFrame(
-                            list(importance.items()), 
-                            columns=['特徴量', '重要度']
-                        ).sort_values('重要度', ascending=False)
-                        st.bar_chart(importance_df.set_index('特徴量'))
-                else:
-                    st.error("モデルの訓練に失敗しました")
+            if st.button("モデル訓練を開始"):
+                # モデル訓練の実行
+                with st.spinner("モデルを訓練中..."):
+                    # プログレスバーとステータステキストの表示
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    X, y = generate_training_data()
+
+                    # ステップ１：　データ生成
+                    status_text.text("ステップ1/4: 訓練データ生成中...")
+                    progress_bar.progress(25)
+                    X, y = generate_training_data()
+
+                    # データの詳細を表示
+                    st.write("### 生成されたデータの詳細")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("総サンプル数", len(X))
+                    with col2:
+                        st.metric("特徴量の数", X.shape[1])
+                    with col3:
+                        unique, counts = np.unique(y, return_counts=True)
+                        st.write("**クラス分布:**")
+                        for label, count in zip(unique, counts):
+                            st.write(f"- {label}: {count}個")
+
+                    # ステップ2: データ前処理
+                    status_text.text("ステップ2/4: データ前処理中...")
+                    progress_bar.progress(50)
+                    time.sleep(0.5)  # 処理を可視化するため
+            
+                    # ステップ3: モデル訓練
+                    status_text.text("ステップ3/4: モデル学習中...")
+                    progress_bar.progress(75)
+
+                    # 実際の訓練（詳細表示）
+                    if st.session_state.ml_model.train(X, y):
+                        st.session_state.model_trained = True
+
+                        # ステップ4: 結果の表示
+                        status_text.text("ステップ4/4: 結果の分析中...")
+                        progress_bar.progress(100)
+                        time.sleep(0.5)  # 処理を可視化するため
+
+                        st.success("モデルの訓練が完了しました！")
+
+                        # 特徴量の重要度を表示
+                        importance = st.session_state.ml_model.get_feature_importance()
+                        if importance:
+                            st.subheader("特徴量の重要度(グラフ)")
+                            importance_df = pd.DataFrame(
+                                list(importance.items()), 
+                                columns=['特徴量', '重要度']
+                            ).sort_values('重要度', ascending=False)
+
+                            # 横棒グラフで表示
+                            fig, ax = plt.subplots(figsize=(10, 6))
+                            ax.barh(importance_df['特徴量'], importance_df['重要度'])
+                            ax.set_xlabel('重要度')
+                            ax.set_title('各特徴量がモデルの予測に与える影響')
+                            plt.tight_layout()
+                            st.pyplot(fig)
+
+                            # 解釈の説明
+                            st.write("### 結果の解釈")
+                            top_feature = importance_df.iloc[0]['特徴量']
+                            st.write(f"最も重要な特徴量は「**{top_feature}**」です。")
+                            st.write("この特徴量がモデルの予測に最も大きく影響しています。")
+                
+            else:
+                st.error("モデル訓練に失敗しました")                
+
+            # 完了したらプログレスバーを消去
+            progress_bar.empty()
+            status_text.empty()
 
 def cleanup():
     """アプリケーション終了時のクリーンアップ処理"""
