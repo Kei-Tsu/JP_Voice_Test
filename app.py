@@ -273,7 +273,7 @@ def show_user_guide():
     if st.session_state.first_visit and not st.session_state.user_guide_completed:
         st.markdown("""
         <div class="guide-box">
-        <h3>🔰 初めての方へ</h3>
+        <h3>初めての方へ</h3>
         <p>このアプリは3つのステップで使います：</p>
         <ol>
             <li><strong>ホーム</strong>: アプリの説明を読む</li>
@@ -288,12 +288,12 @@ def show_user_guide():
         with col1:
             if st.button("ガイドを読み進める", key="continue_guide"):
                 st.session_state.show_guide = True
-                st.experimental_rerun()
+                st.rerun()
         with col2:
             if st.button("ガイドをスキップ", key="skip_guide"):
                 st.session_state.user_guide_completed = True
                 st.session_state.first_visit = False
-                st.experimental_rerun()
+                st.rerun()
 
 # 音声フレームを処理するコールバック関数（リアルタイム用）
 def audio_frame_callback(frame):
@@ -754,15 +754,15 @@ def main():
                         # 練習のヒント
                         st.markdown('<h3 class="sub-header">💡 練習のヒント</h3>', unsafe_allow_html=True)
                         
-                        with st.expander("📚 改善のための具体的な方法", expanded=False):
+                        with st.expander("改善のための具体的な方法", expanded=False):
                             if rule_based_evaluation['clarity_level'] != "良好":
                                 st.markdown("""
                                 **基本的な練習方法**
-                                1. **呼吸（息継ぎ）を意識する**: 話始める前に十分な息を吸う
-                                2. **文末を1音上げる気持ちで**: 最後の単語を意識する
+                                1. **呼吸（息継ぎ）を意識する**: 話始める前に十分な息を吸いましょう
+                                2. **文末を1音上げる気持ちで**: 最後の単語を意識して話します
                                 3. **短い文で区切る**: 短く分けて話すことで伝わりやすく
                                 4. **録音して確認**: 客観的に自分の声を聞く
-                                5. **家族や恋人に率直に聞いて金る**: フィードバックをもらいましょう 
+                                5. **家族や恋人に率直に聞いてもらう**: フィードバックをもらいましょう 
                                 
                                 """)
                             else:
@@ -771,10 +771,9 @@ def main():
                                 1. **継続的な意識**: 今の話し方を維持しましょう
                                 2. **さまざまなシーンで試す**: 異なる会話サンプルやそれ以外でも練習しましょう
                                 3. **早口時の注意**: 急いでいる時こそ語尾を意識しましょう
-                                4. **他の人への指導**: 学んだことを他の人に教える
-                                """)
+                                """) 
 
-                        st.success("🎉 分析が完了しました！継続的な練習で改善していきましょう。")
+                        st.success("分析が完了しました！継続的な練習で改善していきましょう。")
 
                 except Exception as e:
                     st.error(f"音声分析中にエラーが発生しました: {e}")
@@ -817,18 +816,18 @@ def main():
                         drop_rate = st.session_state.current_drop_rate
                                 
                         if drop_rate < 0.1:
-                            status_placeholder.success("🌟 良い感じです！語尾までしっかり発音できています。")
+                            status_placeholder.success("良い感じです！語尾までしっかり発音できています。")
                         elif drop_rate < 0.25:
-                            status_placeholder.info("⚠️ 語尾がやや弱まっています。もう少し意識しましょう。")
+                            status_placeholder.info("語尾がやや弱まっています。もう少し意識しましょう。")
                         else:
-                            status_placeholder.warning("❗ 語尾の音量が大きく低下しています。文末を意識して！")
+                            status_placeholder.warning("語尾の音量が大きく低下しています。文末を意識して！")
                     else:
-                        status_placeholder.info("🎤 マイクに向かってサンプル文を読み上げてください。")
-                            
+                        status_placeholder.info("マイクに向かってサンプル文を読み上げてみましょう。")
+
                     # フィードバック履歴の表示
                     display_feedback_history(feedback_placeholder)
                 else:
-                    status_placeholder.warning("⏳ マイク接続待機中...「START」ボタンをクリックしてください。")
+                    status_placeholder.warning("マイク接続待機中...「START」ボタンをクリックしてください。")
 
             except Exception as webrtc_error:
                 st.error(f"WebRTC接続中にエラーが発生しました: {webrtc_error}")
@@ -861,13 +860,13 @@ def main():
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                st.warning("**AI未訓練**")
+                st.warning("**AIは未訓練**")
                 st.write("AIがまだ訓練されていません。下のボタンから訓練を開始してください。")
                 st.markdown('</div>', unsafe_allow_html=True)
         
         with col2:
             st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-            st.info("ℹ️ **訓練について**")
+            st.info("**訓練について**")
             st.write("- 訓練は1-2分程度で完了します")
             st.write("- シミュレーションデータを使用")
             st.write("- 訓練後は練習ページで高精度分析が可能")
@@ -877,15 +876,15 @@ def main():
         if st.session_state.model_trained:
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🔄 AI再訓練", type="secondary"):
+                if st.button("Aの再訓練", type="secondary"):
                     st.session_state.model_trained = False
-                    st.experimental_rerun()
+                    st.rerun()
             with col2:
-                if st.button("📊 訓練済みモデル詳細"):
+                if st.button("訓練済みモデル詳細"):
                     # 既存モデルの詳細表示
                     importance = st.session_state.ml_model.get_feature_importance()
                     if importance:
-                        st.subheader("🔬 特徴量の重要度")
+                        st.subheader("特徴量の重要度")
                         importance_df = pd.DataFrame(
                             list(importance.items()), 
                             columns=['特徴量', '重要度']
@@ -916,7 +915,7 @@ def main():
                     time.sleep(0.5)
 
                     # データの詳細表示
-                    st.markdown('<h4 class="sub-header">📊 生成されたデータの詳細</h4>', unsafe_allow_html=True)
+                    st.markdown('<h4 class="sub-header">生成されたデータの詳細</h4>', unsafe_allow_html=True)
                     col1, col2, col3 = st.columns(3)
                     with col1:
                         st.metric("総サンプル数", len(X))
@@ -946,7 +945,7 @@ def main():
                         progress_bar.progress(100)
                         time.sleep(0.5)
 
-                        st.success("🎉 AI訓練が完了しました！")
+                        st.success("AI訓練が完了しました！")
 
                         # 特徴量重要度の表示
                         importance = st.session_state.ml_model.get_feature_importance()
@@ -966,7 +965,7 @@ def main():
                             st.pyplot(fig)
 
                             # 結果の解釈
-                            st.markdown('<h4 class="sub-header">💡 結果の解釈</h4>', unsafe_allow_html=True)
+                            st.markdown('<h4 class="sub-header">結果の解釈</h4>', unsafe_allow_html=True)
                             top_feature = importance_df.iloc[0]['特徴量']
                             st.markdown(f"""
                             <div class="info-box">
@@ -978,7 +977,7 @@ def main():
                             """, unsafe_allow_html=True)
                 
                     else:
-                        st.error("❌ AI訓練に失敗しました")                
+                        st.error("AI訓練に失敗しました")                
 
                     # プログレスバーをクリア
                     progress_bar.empty()
@@ -988,7 +987,7 @@ def main():
                     if st.session_state.model_trained:
                         st.markdown("""
                         <div class="next-step">
-                        <h4>🎯 次のステップ</h4>
+                        <h4>次のステップ</h4>
                         <p>AI訓練が完了しました！「練習を始める」ページで高精度な音声分析を試してみましょう。</p>
                         </div>
                         """, unsafe_allow_html=True)
