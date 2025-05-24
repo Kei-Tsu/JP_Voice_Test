@@ -18,7 +18,6 @@ class VoiceQualityModel:
     このクラスは音声の特徴量から会話音声の品質を判断するAIモデルです。
     主に「良好」「文末が弱い」「小声すぎる」の3つのカテゴリに分類します。
     """
-
     def __init__(self):
         """モデルの初期化"""
         self.model = None # ランダムフォレストモデル
@@ -31,6 +30,7 @@ class VoiceQualityModel:
             '平均音量', '音量変動', '文頭音量', '文中音量', '文末音量',
             '音量低下率', '最後20%音量', '最後20%低下率', 'スペクトル重心', '話の速度'
         ]
+        
         # モデルの性能記録用
         self.training_accuracy = 0
         self.test_accuracy = 0
@@ -92,6 +92,7 @@ class VoiceQualityModel:
             
             # データを訓練用とテスト用に分割
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+            
             st.write(f"訓練データとテストデータに分割: {len(X_train)}訓練, {len(X_test)}テスト")
 
             # NaNや無限大値の処理
@@ -106,15 +107,15 @@ class VoiceQualityModel:
 
             # ランダムフォレスト分類器を作成
             self.model = RandomForestClassifier(
-                n_estimators=200,  # 決定木の数
-                max_depth=15,      # 木の最大深さ
+                n_estimators=100,  # 決定木の数
+                max_depth=10,      # 木の最大深さ
                 min_samples_split=5,  # 分割に必要な最小サンプル数
                 min_samples_leaf=2,   # 葉に必要な最小サンプル数
                 random_state=42,   # 再現性のための乱数シード
                 n_jobs=-1,         # 並列処理を使用
                 class_weight='balanced'  # クラスの不均衡を考慮
             )
-            st.write(f"🤖 ランダムフォレストモデル作成: 200本の決定木を準備")
+            st.write(f"🤖 ランダムフォレストモデル作成: 100本の決定木を準備")
 
             # モデルの訓練
             st.write("**学習を開始しています...**")
@@ -128,12 +129,16 @@ class VoiceQualityModel:
             st.success(f"訓練データでの精度: {train_accuracy:.1%}")
             st.success(f"テストデータでの精度: {test_accuracy:.1%}")
 
+            # クラスのリストを保存
+            self.classes = self.model.classes_
+            st.write(f"学習したクラス: {list(self.classes)}")
+            
             # テストデータでの詳細な評価
             y_pred = self.model.predict(X_test_scaled)
 
             # 分類レポートを表示
             st.write("**詳細な評価結果:**")
-            report = classification_report(y_test, y_pred, target_names=self.classes, output_dict=True)
+            report = classification_report(y_test, y_pred, target_names=unique_labels, output_dict=True)
 
             # 各クラスの性能を表示
             for class_name in unique_labels:
@@ -161,11 +166,7 @@ class VoiceQualityModel:
             else:
                 st.error("モデルの性能は低いです。データの質や量を見直す必要があります。")               
                             
-            # クラスのリストを保存
-            self.classes = self.model.classes_
-            st.write(f"学習したクラス: {list(self.classes)}")
-
-           # 特徴量の重要度を取得
+            # 特徴量の重要度を取得
             importances = self.model.feature_importances_
             st.write(f"特徴量の重要度: {importances}")
             importance_data = []
@@ -263,59 +264,7 @@ class VoiceQualityModel:
                 }
         return None
 
-    def save_model(self, file_path):
-        """モデルを保存する
-        引数:
-            file_path (str): 保存先のファイルパス
-        戻り値:
-            bool: 保存成功ならTrue、失敗ならFalse   
-        """
-        try:
-            if not self.is_trained or self.model is None:
-                logger.warning("保存するモデルがありません")
-                return False
-            
-            model_info = {
-                'model': self.model,
-                'scaler': self.scaler,
-                'is_trained': self.is_trained,
-                'classes': self.classes,
-                'feature_names': self.feature_names,
-                'training_accuracy': self.training_accuracy,
-                'test_accuracy': self.test_accuracy
-                }
-
-            joblib.dump(model_info, file_path)
-            logger.info(f"モデルを保存しました: {file_path}")
-            return True
-        
-        except Exception as e:
-            logger.error(f"モデル保存エラー: {e}")
-            return False
-        
-    def load_model(self,file_path):
-        """保存されたモデルを読み込む
-        引数:
-        file_path (str): 読み込み元のファイルパス
-        """
-        try:
-            # モデルを読み込む
-            model_info = joblib.load(file_path)
-
-            self.model = model_info['model']
-            self.scaler = model_info['scaler']
-            self.is_trained = model_info['is_trained']
-            self.classes = model_info['classes']
-            self.feature_names = model_info.get('feature_names', self.feature_names)
-            self.training_accuracy = model_info.get('training_accuracy', 0)
-
-            logger.info(f"モデルを読み込みました: {file_path}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"モデル読み込みエラー: {e}")
-            return False
-
+ 
 # クラス外の独立した関数として定義
 def generate_training_data():
     """機械学習用のシミュレーションデータを生成する関数
@@ -329,6 +278,7 @@ def generate_training_data():
         y = []  # ラベルデータ
 
         # シミュレーションデータを生成
+        # 「良好」な音声データ（80個）
         for i in range(80):
             features = [
                 np.random.uniform(0.08, 0.25),   # mean_volume
@@ -386,43 +336,7 @@ def generate_training_data():
     except Exception as e:
         logger.error(f"訓練データ生成エラー: {e}")
         return np.array([]), np.array([])
-
-# データセット保存・読み込み機能
-def save_training_data(X, y, file_path):
-    """訓練データを保存
-    引数:
-        X (np.ndarray): 特徴量
-        y (np.ndarray): ラベル
-        file_path (str): 保存先のファイルパス
-    戻り値:
-        bool: 保存成功ならTrue、失敗ならFalse
-    """
-    try:
-        np.savez(file_path, X=X, y=y)
-        logger.info(f"訓練データを保存しました: {file_path}")
-        return True
-    except Exception as e:
-        logger.error(f"訓練データ保存エラー: {e}")
-        return False
-
-def load_training_data(file_path):
-    """訓練データを読み込む
-    引数:
-        file_path (str): 読み込み元のファイルパス
-    戻り値:
-        tuple: 特徴量データとラベル
-        """
-    try:
-        data = np.load(file_path)
-        X = data['X']
-        y = data['y']
-        logger.info(f"訓練データを読み込みました: {file_path}")
-        return X, y
-    except Exception as e:
-        logger.error(f"訓練データ読み込みエラー: {e}")
-        return np.array([]), np.array([])
-    
-# リアルタイム音声品質評価用のヘルパー関数
+   
 def quick_quality_assessment(features_dict):
     """軽量な音声品質評価（機械学習なし）
     機械学習モデルが利用できない場合の簡易評価。
