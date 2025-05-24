@@ -37,7 +37,7 @@ class VoiceQualityModel:
 
     def prepare_features(self, features_dict):
         """特徴辞書から機械学習用の特徴量配列を作成"""
-        # 使用する特徴量のキー：voice_analysis.py からの辞書
+        # 使用する特徴量のキーからの辞書
         feature_keys = [
             'mean_volume', 
             'std_volume', 
@@ -192,7 +192,7 @@ class VoiceQualityModel:
             logger.error(f"モデル訓練エラー: {e}")
             return False
         
-    def predict(self, features_dict, realtime=False):
+    def predict(self, features_dict):
         """音声品質を予測する
         引数:
             features_dict (dict): voice_analysis.py からの特徴量の辞書
@@ -206,7 +206,7 @@ class VoiceQualityModel:
                 return None, 0
         
             # 特徴量配列を作成
-            features = self.prepare_features_realtime(features_dict)
+            features = self.prepare_features(features_dict)
 
             # 特徴量を2次元配列に変換（sklearn要件）
             features_2d = np.array([features])

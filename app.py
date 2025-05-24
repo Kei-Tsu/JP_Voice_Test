@@ -494,7 +494,7 @@ def main():
                 3. **AIが学習を完了するまで待つ（約1-2分）**
                 4. **特徴量の重要度グラフを確認**
                 
-                ✨ AIを訓練することで、より正確な音声分析が可能になります！
+                AIを訓練することで、より正確な音声分析が可能になります！
                 """)
             
             with st.expander("STEP 2: 音声で練習する"):
@@ -505,7 +505,7 @@ def main():
                 4. **分析結果とアドバイスを確認**
                 5. **改善点を意識して再度練習**
                 
-                📈 練習を重ねることで、確実に話し方が改善されます！
+                練習を重ねることで、確実に話し方が改善されます！
                 """)
             
             with st.expander("STEP 3: 継続的な改善"):
@@ -515,10 +515,10 @@ def main():
                 3. **AIとルールベース両方の結果を比較**
                 4. **日常会話に意識を取り入れる**
                 
-                練習を重ねるとより自然な話し方が身につきます。リモート会議などでもプラスの効果
+                意識を高めると自然な話し方が意識できます。リモート会議などでもプラスの効果
                 """)
             
-            if st.button("ガイドを完了する"):
+            if st.button("理解しました"):
                 st.session_state.user_guide_completed = True
                 st.session_state.first_visit = False
                 st.success("さっそく左のメニューの「モデル訓練」から始めましょう！")
@@ -529,7 +529,7 @@ def main():
         # モデル未訓練時の警告
         if not st.session_state.model_trained:
             st.warning("""
-            　 **AI未準備の状態です**
+            　**AI未準備の状態です**
             
             より正確な分析のために、先に「モデル訓練」ページでAIを準備することをお勧めします。
             現在はルールベースの分析のみ利用可能です。
@@ -576,272 +576,289 @@ def main():
                 key="file_uploader",
                 help="WAVまたはMP3形式の音声ファイルを選択してください"
             )
-            
-            if uploaded_file is not None:
-                tmp_file_path = None
+
+def handle_file_upload(feature_extractor):
+    """ファイルアップロード処理（録音ソース検出付き）"""
+    uploaded_file = st.file_uploader(
+        "音声ファイルをアップロードしてください", 
+        type=["wav", "mp3"],
+        key="file_uploader",
+        help="WAVまたはMP3形式の音声ファイルを選択してください"
+    )
+
+    # 録音ソースの選択
+    st.markdown("### 録音環境の選択")
+    recording_source = st.radio(
+        "この音声はどのように録音されましたか？",
+        ["file", "microphone", "smartphone"],
+        format_func=lambda x: {
+            "file": "ファイル（録音環境不明）",
+            "microphone": "マイク録音（PC・専用マイク）", 
+            "smartphone": "スマートフォン録音"
+        }[x],
+        help="録音環境により音量補正の方法が変わります"
+    )
+
+    # 会話環境の選択
+    conversation_context = st.selectbox(
+        "会話の状況を選択してください",
+        ["casual", "intimate", "very_intimate", "formal"],
+        format_func=lambda x: {
+            "casual": "普通の会話（友人同士）",
+            "intimate": "親密な会話（恋人・親しい友人）",
+            "very_intimate": "非常に親密（家族間の小声）",
+            "formal": "フォーマル（会議・発表）"
+        }[x],
+        help="親密さのレベルにより評価基準が調整されます"
+    )
+    
+    if uploaded_file is not None:
+        tmp_file_path = None
+        try:
+            with st.spinner("音声ファイルを処理中..."):
+                # 一時ファイルとして保存
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_file:
+                    tmp_file.write(uploaded_file.getvalue())
+                    tmp_file_path = tmp_file.name
+
+                # 音声ファイルを再生可能に表示
+                st.audio(tmp_file_path, format='audio/wav')
+
+                # 音声データの読み込み
+                y, sr = librosa.load(tmp_file_path, sr=None)
+
+            # 分析開始（録音ソースと会話環境を考慮）
+            with st.spinner("音声を分析中..."):
+                analyze_audio_with_context(feature_extractor, y, sr, recording_source, conversation_context)
+
+        except Exception as e:
+            st.error(f"音声分析中にエラーが発生しました: {e}")
+            logger.error(f"音声分析エラー: {e}", exc_info=True)
+
+        finally:
+            # 一時ファイルを削除
+            if tmp_file_path is not None and os.path.exists(tmp_file_path):
                 try:
-                    # ファイル処理の開始を示す
-                    with st.spinner("音声ファイルを処理中..."):
-                        # 一時ファイルとして保存
-                        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_file:
-                            tmp_file.write(uploaded_file.getvalue())
-                            tmp_file_path = tmp_file.name
+                    os.unlink(tmp_file_path)
+                except Exception as cleanup_error:
+                    logger.warning(f"一時ファイル削除エラー: {cleanup_error}")
 
-                        # 音声ファイルを再生可能に表示
-                        st.audio(tmp_file_path, format='audio/wav')
+def analyze_audio_with_context(feature_extractor, y, sr, recording_source, conversation_context):
+    """録音環境と会話コンテキストを考慮した音声分析"""
+    
+    # 録音ソースを特徴抽出に渡す
+    features = feature_extractor.extract_features(y, sr, recording_source)
+    
+    # 会話コンテキストを特徴に追加
+    features['conversation_context'] = conversation_context
+    
+    # 練習回数をカウント
+    st.session_state.practice_count += 1
+    
+    # コンテキスト情報の表示
+    st.markdown('###録音・会話環境')
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.info(f"**録音方法**: {recording_source}")
+        
+    with col2:
+        st.info(f"**会話レベル**: {conversation_context}")
+        
+    with col3:
+        intimacy = features.get('intimacy_level', 'unknown')
+        st.info(f"**AI判定親密さ**: {intimacy}")
+    
+    # 音量補正情報の表示
+    if 'volume_adjustment_ratio' in features:
+        ratio = features['volume_adjustment_ratio']
+        if ratio != 1.0:
+            if ratio < 1.0:
+                st.success(f"音量を{1/ratio:.1f}倍に調整しました（親密な会話レベルに補正）")
+            else:
+                st.info(f"音量を{ratio:.1f}倍に調整しました（親密な会話レベルに補正）")
+    
+    # 音声分析の視覚化
+    st.markdown('<h3 class="sub-header">音声分析結果</h3>', unsafe_allow_html=True)
+    fig = plot_audio_analysis(features, y, sr)
+    st.pyplot(fig)
+    
+    # 音量分析結果の表示
+    display_volume_analysis_with_context(features)
+    
+    # 総合分析結果
+    display_comprehensive_analysis_with_context(features)
 
-                        # 音声データの読み込み
-                        y, sr = librosa.load(tmp_file_path, sr=None)
+def display_volume_analysis_with_context(features):
+    """コンテキスト考慮の音量分析表示"""
+    st.markdown('<h3 class="sub-header">音量分析詳細</h3>', unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+        st.metric("補正後平均音量", f"{features['mean_volume']:.4f}")
+        if 'original_mean_volume' in features:
+            st.metric("元の平均音量", f"{features['original_mean_volume']:.4f}")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+        st.metric("文頭音量", f"{features['start_volume']:.4f}")
+        st.metric("文中音量", f"{features['middle_volume']:.4f}")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+        st.metric("文末音量", f"{features['end_volume']:.4f}")
+        st.metric("文末低下率", f"{features['end_drop_rate']:.4f}")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+        st.metric("最後20%音量", f"{features['last_20_percent_volume']:.4f}")
+        st.metric("最後20%低下率", f"{features['last_20_percent_drop_rate']:.4f}")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-                    # 分析開始
-                    with st.spinner("音声を分析中..."):
-                        # 音声特徴量の抽出
-                        features = feature_extractor.extract_features(y, sr)
-                        
-                        # 練習回数をカウント
-                        st.session_state.practice_count += 1
-                        
-                        # 音声分析の視覚化
-                        st.markdown('<h3 class="sub-header">音声分析結果</h3>', unsafe_allow_html=True)
-                        fig = plot_audio_analysis(features, y, sr)
-                        st.pyplot(fig)
-                        
-                        # 音量分析結果の表示
-                        st.markdown('<h3 class="sub-header">音量分析詳細</h3>', unsafe_allow_html=True)
-                                
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                            st.metric("平均音量", f"{features['mean_volume']:.4f}")
-                            st.metric("文頭音量", f"{features['start_volume']:.4f}")
-                            st.markdown('</div>', unsafe_allow_html=True)
-                        
-                        with col2:
-                            st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                            st.metric("文中音量", f"{features['middle_volume']:.4f}")
-                            st.metric("文末音量", f"{features['end_volume']:.4f}")
-                            st.markdown('</div>', unsafe_allow_html=True)
-                        
-                        with col3:
-                            st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                            st.metric("文末音量低下率", f"{features['end_drop_rate']:.4f}")
-                            st.metric("最後20%音量低下率", f"{features['last_20_percent_drop_rate']:.4f}")
-                            st.markdown('</div>', unsafe_allow_html=True)
+def display_comprehensive_analysis_with_context(features):
+    """コンテキスト考慮の総合分析表示"""
+    st.markdown('<h3 class="sub-header">コンテキスト考慮総合分析</h3>', unsafe_allow_html=True)
+    
+    # ルールベースの評価（コンテキスト考慮）
+    rule_based_evaluation = evaluate_clarity(features)
+    
+    # 機械学習による評価
+    ml_available = st.session_state.model_trained
+    
+    if ml_available:
+        try:
+            ml_prediction, ml_confidence = st.session_state.ml_model.predict(features)
+            ml_success = True
+        except Exception as ml_error:
+            ml_prediction, ml_confidence = None, 0
+            ml_success = False
+            st.error(f"AI分析エラー: {ml_error}")
+    else:
+        ml_prediction, ml_confidence = None, 0
+        ml_success = False
+    
+    # 結果表示
+    if ml_success and ml_available:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 🤖 AI分析結果")
+            st.markdown('<div class="metric-container">', unsafe_allow_html=True)
             
-                        # 総合分析結果
-                        st.markdown('<h3 class="sub-header">🎯 総合分析結果</h3>', unsafe_allow_html=True)
-                        
-                        # ルールベースの評価
-                        rule_based_evaluation = evaluate_clarity(features)
+            if ml_prediction == "良好":
+                st.success(f"**予測結果: {ml_prediction}**")
+                advice_text = f"良い発話です！{features.get('conversation_context', '')}レベルの会話として語尾まで伝わりやすい話し方です。"
+            elif ml_prediction == "文末が弱い":
+                st.warning(f"**予測結果: {ml_prediction}**")
+                advice_text = f"{features.get('conversation_context', '')}レベルの会話でも、文末を少し意識すると良いでしょう。"
+            else:
+                st.info(f"**予測結果: {ml_prediction}**")
+                advice_text = f"さらなる改善の余地があります。"
             
-                        # 機械学習による評価
-                        ml_available = st.session_state.model_trained
+            st.metric("予測信頼度", f"{ml_confidence:.1%}")
+            st.write("**AIのアドバイス:**")
+            st.write(advice_text)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown("#### コンテキスト考慮分析")
+            st.markdown('<div class="metric-container">', unsafe_allow_html=True)
             
-                        if ml_available:
-                            try:
-                                ml_prediction, ml_confidence = st.session_state.ml_model.predict(features)
-                                ml_success = True
-                            except Exception as ml_error:
-                                ml_prediction, ml_confidence = None, 0
-                                ml_success = False
-                                st.error(f"AI分析エラー: {ml_error}")
-                                # エラーの詳細をログに出力
-                                logger.error(f"AI分析の詳細エラー: {ml_error}", exc_info=True)
-                        else:
-                            ml_prediction, ml_confidence = None, 0
-                            ml_success = False
-            
-                         # 結果の表示
-                        if ml_success and ml_available:
-                            # AI分析とルールベース両方の結果を表示
-                            col1, col2 = st.columns(2)
-
-                            with col1:
-                                st.markdown("#### 🤖 AI分析結果")
-                                st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-
-                                # 結果に応じた色分け
-                                if ml_prediction == "良好":
-                                    st.success(f"**予測結果: {ml_prediction}**")
-                                elif ml_prediction == "文末が弱い":
-                                    st.warning(f"**予測結果: {ml_prediction}**")
-                                else:
-                                    st.info(f"**予測結果: {ml_prediction}**")
-
-                                st.metric("予測信頼度", f"{ml_confidence:.1%}")
-
-                                # AIからの具体的なアドバイス
-                                st.write("**AIのアドバイス:**")
-                                if ml_prediction == "良好":
-                                    st.write("良い発話です！語尾までしっかりと、相手に結論まで伝わりやすい話し方です")
-                                elif ml_prediction == "文末が弱い":
-                                    st.write("文末の音量が低下しています。日本語は文末が重要なことも多いので、最後まで意識しましょう。")
-                                elif ml_prediction == "小声すぎる":
-                                    st.write("全体的に声のボリュームが小さめです。もう少しだけ声を張って話してみましょう。")
-                                else:
-                                    st.write("普通の発話レベルです。さらなる改善の余地があります。")
-                    
-                                st.markdown('</div>', unsafe_allow_html=True)
-
-                            with col2:
-                                st.markdown("#### ルールベース分析結果")
-                                st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                                
-                                # ルールベースの評価結果を表示 
-                                if rule_based_evaluation['clarity_level'] == "良好":
-                                    st.success(f"**評価: {rule_based_evaluation['clarity_level']}**")
-                                elif rule_based_evaluation['clarity_level'] in ["やや弱い", "少し頑張りましょう"]:
-                                    st.warning(f"**評価: {rule_based_evaluation['clarity_level']}**")
-                                else:
-                                    st.info(f"**評価: {rule_based_evaluation['clarity_level']}**")
-                    
-                                st.metric("明瞭度スコア", f"{rule_based_evaluation['score']}/100")
-                    
-                                st.write("**従来手法のアドバイス:**")
-                                st.write(rule_based_evaluation['advice'])
-
-                                st.markdown('</div>', unsafe_allow_html=True)
-
-                            # 比較セクション
-                            st.markdown("### 分析手法の比較")
+            if rule_based_evaluation['clarity_level'] == "良好":
+                st.success(f"**評価: {rule_based_evaluation['clarity_level']}**")
+            else:
+                st.warning(f"**評価: {rule_based_evaluation['clarity_level']}**")
                 
-                            # 結論の一致性を確認
-                            good_match = (ml_prediction == "良好" and rule_based_evaluation['clarity_level'] == "良好")
-                            weak_match = (ml_prediction == "文末が弱い" and rule_based_evaluation['clarity_level'] in ["やや弱い", "少し頑張りましょう"])
-                            
-                            if good_match or weak_match:
-                                st.success("AIとルールベース分析が同様の結論に達しました。信頼性が高い分析結果です。")
-                            else:
-                                st.info("ℹAIとルールベース分析で異なる結果が出ました。複合的に判断してください。")
-                
-                            # 詳細比較表
-                            comparison_df = pd.DataFrame({
-                                '分析方法': ['AI（機械学習）', 'ルールベース'],
-                                '結果': [ml_prediction, rule_based_evaluation['clarity_level']],
-                                '信頼度/スコア': [f"{ml_confidence:.1%}", f"{rule_based_evaluation['score']}/100"],
-                                '特徴': ['学習データから判定', '音響ルールで判定']
-                            })
-                            st.table(comparison_df)
-                
-                        else:
-                            # ルールベースの結果のみ表示
-                            st.markdown("#### 📋 ルールベース分析結果")
-                            if not ml_available:
-                                st.warning("🤖 AIが未準備のため、ルールベース分析のみ利用可能です。")
-                
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                                st.metric("明瞭度スコア", f"{rule_based_evaluation['score']}/100")
-                                if rule_based_evaluation['clarity_level'] == "良好":
-                                    st.success(f"**評価: {rule_based_evaluation['clarity_level']}**")
-                                elif rule_based_evaluation['clarity_level'] in ["やや弱い", "少し頑張りましょう"]:
-                                    st.warning(f"**評価: {rule_based_evaluation['clarity_level']}**")
-                                else:
-                                    st.info(f"**評価: {rule_based_evaluation['clarity_level']}**")
-                                st.markdown('</div>', unsafe_allow_html=True)
-                
-                            with col2:
-                                st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                                st.subheader("アドバイス")
-                                st.write(rule_based_evaluation['advice'])
-                                st.markdown('</div>', unsafe_allow_html=True)
-                
-                            # AI訓練の案内
-                            if not ml_available:
-                                st.markdown("""
-                                <div class="next-step">
-                                <h4>より正確な分析のために</h4>
-                                <p>「モデル訓練」ページでAIを訓練すると、より精密な分析が可能になります。</p>
-                                </div>
-                                """, unsafe_allow_html=True)
+            st.metric("明瞭度スコア", f"{rule_based_evaluation['score']}/100")
+            st.write("**コンテキスト考慮アドバイス:**")
+            st.write(rule_based_evaluation['advice'])
+            st.write(f"**分析コンテキスト**: {rule_based_evaluation.get('recording_context', '不明')}")
+            st.markdown('</div>', unsafe_allow_html=True)
+    
+    else:
+        # ルールベースのみの結果表示
+        st.markdown("#### コンテキスト考慮分析結果")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+            st.metric("明瞭度スコア", f"{rule_based_evaluation['score']}/100")
+            if rule_based_evaluation['clarity_level'] == "良好":
+                st.success(f"**評価: {rule_based_evaluation['clarity_level']}**")
+            else:
+                st.warning(f"**評価: {rule_based_evaluation['clarity_level']}**")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown('<div class="metric-container">', unsafe_allow_html=True)
+            st.subheader("アドバイス")
+            st.write(rule_based_evaluation['advice'])
+            st.write(f"**コンテキスト**: {rule_based_evaluation.get('recording_context', '不明')}")
+            st.markdown('</div>', unsafe_allow_html=True)
+    
+    # 練習のヒント（コンテキスト考慮）
+    show_context_aware_practice_hints(features, rule_based_evaluation)
 
-                        # 練習のヒント
-                        st.markdown('<h3 class="sub-header">💡 練習のヒント</h3>', unsafe_allow_html=True)
-                        
-                        with st.expander("改善のための具体的な方法", expanded=False):
-                            if rule_based_evaluation['clarity_level'] != "良好":
-                                st.markdown("""
-                                **基本的な練習方法**
-                                1. **呼吸（息継ぎ）を意識する**: 話始める前に十分な息を吸いましょう
-                                2. **文末を1音上げる気持ちで**: 最後の単語を意識して話します
-                                3. **短い文で区切る**: 短く分けて話すことで伝わりやすく
-                                4. **録音して確認**: 客観的に自分の声を聞く
-                                5. **家族や恋人に率直に聞いてもらう**: フィードバックをもらいましょう 
-                                
-                                """)
-                            else:
-                                st.markdown("""
-                                **現在の良い話し方を維持**
-                                1. **継続的な意識**: 今の話し方を維持しましょう
-                                2. **さまざまなシーンで試す**: 異なる会話サンプルやそれ以外でも練習しましょう
-                                3. **早口時の注意**: 急いでいる時こそ語尾を意識しましょう
-                                """) 
+def show_context_aware_practice_hints(features, evaluation):
+    """コンテキスト考慮の練習ヒント"""
+    st.markdown('<h3 class="sub-header">録音環境を考慮した練習のヒント</h3>', unsafe_allow_html=True)
+    
+    recording_source = features.get('recording_source', 'file')
+    conversation_context = features.get('conversation_context', 'casual')
+    
+    with st.expander("録音環境別の改善方法", expanded=False):
+        
+        if recording_source == "microphone":
+            st.markdown("""
+            **マイク録音での練習について**
+            - マイクは実際の会話より音量を増幅するため、より厳しい基準で評価しています
+            - 実際の親密な会話では、この練習結果より少し声を意識する必要があります
+            - マイクから適切な距離（20-30cm）を保って録音してください
+            """)
+        elif recording_source == "smartphone":
+            st.markdown("""
+            **スマートフォン録音での練習について**
+            - スマートフォンのマイクは内蔵AGC（自動音量調整）が働く場合があります
+            - 静かな環境で録音してください
+            - 口元から15-20cm程度の距離で録音いただくことを推奨します
+            """)
+        
+        if conversation_context in ["intimate", "very_intimate"]:
+            st.markdown("""
+            **親密な会話での注意点**
+            - 小声でも語尾の明瞭さは重要です
+            - 家族や恋人との会話でも、重要な情報は最後まで伝える意識を持ちましょう
+            - 普段より少しだけ語尾を意識するだけで大きく改善されます
+            """)
+        
+        if evaluation['clarity_level'] != "良好":
+            st.markdown(f"""
+            ** {conversation_context}レベルでの改善方法**
+            1. **呼吸を意識する**: 話し始める前に十分な息を吸う
+            2. **文末を1音上げる**: 最後の単語を意識的に少し強調
+            3. **短い文で区切る**: 長い文は途中で息が切れやすい
+            4. **録音して客観視**: 自分の声を客観的に聞く習慣をつける
+            """)
+        else:
+            st.markdown("""
+            **現在の良い話し方を維持**
+            - この調子で親密な会話を続けましょう
+            - 他のシチュエーションでも同様に意識してみてください
+            - 疲れているときや急いでいるときも語尾を忘れずに
+            """)
+    
+    st.success("コンテキストを考慮した分析が完了しました！日常会話での実践を心がけましょう。")    
 
-                        st.success("分析が完了しました！継続的な練習で改善していきましょう。")
+# ＃以下補正情報追加以前のデータ            
 
-                except Exception as e:
-                    st.error(f"音声分析中にエラーが発生しました: {e}")
-                    logger.error(f"音声分析エラー: {e}", exc_info=True)
+    page = st.session_state.page  # 追加: page変数をセッションから取得
 
-                finally:
-                    # 一時ファイルを削除
-                    if tmp_file_path is not None and os.path.exists(tmp_file_path):
-                        try:
-                            os.unlink(tmp_file_path)
-                        except Exception as cleanup_error:
-                            logger.warning(f"一時ファイル削除エラー: {cleanup_error}")
-
-        elif practice_method == "リアルタイム評価" and WEBRTC_AVAILABLE:
-            st.markdown('<h3 class="sub-header">リアルタイム評価</h3>', unsafe_allow_html=True)
-            st.info("「START」ボタンをクリックし、ブラウザからのマイク使用許可を承認してください。")
-
-            # プレースホルダーの準備
-            status_placeholder = st.empty()
-            volume_placeholder = st.empty()
-            feedback_placeholder = st.empty()
-
-            try:
-                # WebRTCストリーマーを設定
-                webrtc_ctx = webrtc_streamer(
-                    key="speech-evaluation",
-                    mode=WebRtcMode.SENDONLY,
-                    audio_frame_callback=audio_frame_callback,
-                    rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-                    media_stream_constraints={"video": False, "audio": True}
-                )
-
-                # WebRTC接続が有効な場合
-                if webrtc_ctx.state.playing:
-                    # 音量メーターの表示
-                    display_volume_meter(volume_placeholder)
-                            
-                    # 状態表示
-                    if st.session_state.end_of_sentence_detected:
-                        drop_rate = st.session_state.current_drop_rate
-                                
-                        if drop_rate < 0.1:
-                            status_placeholder.success("良い感じです！語尾までしっかり発音できています。")
-                        elif drop_rate < 0.25:
-                            status_placeholder.info("語尾がやや弱まっています。もう少し意識しましょう。")
-                        else:
-                            status_placeholder.warning("語尾の音量が大きく低下しています。文末を意識して！")
-                    else:
-                        status_placeholder.info("マイクに向かってサンプル文を読み上げてみましょう。")
-
-                    # フィードバック履歴の表示
-                    display_feedback_history(feedback_placeholder)
-                else:
-                    status_placeholder.warning("マイク接続待機中...「START」ボタンをクリックしてください。")
-
-            except Exception as webrtc_error:
-                st.error(f"WebRTC接続中にエラーが発生しました: {webrtc_error}")
-                logger.error(f"WebRTCエラー: {webrtc_error}", exc_info=True)
-
-        # 次のステップの案内
-        show_next_step_guide()
-
-    elif page == "モデル訓練":
+    if page == "モデル訓練":
         st.markdown('<h2 class="sub-header">AI訓練と評価</h2>', unsafe_allow_html=True)
         
         # モデル訓練の説明
