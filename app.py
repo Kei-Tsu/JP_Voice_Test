@@ -216,14 +216,14 @@ def show_progress_indicator():
     """進捗インジケータを表示"""
     col1, col2, col3 = st.columns(3)
     
-    # Step 1: アプリ理解
+    # Step 1: アプリのご案内
     with col1:
         if st.session_state.user_guide_completed:
-            st.markdown("**1. アプリ理解**", unsafe_allow_html=True)
+            st.markdown("**1. アプリのご案内**", unsafe_allow_html=True)
         elif st.session_state.page == "ホーム":
-            st.markdown("**1. アプリ理解**", unsafe_allow_html=True)
+            st.markdown("**1. アプリのご案内**", unsafe_allow_html=True)
         else:
-            st.markdown("**1. アプリ理解**", unsafe_allow_html=True)
+            st.markdown("**1. アプリのご案内**", unsafe_allow_html=True)
     
     # Step 2: AI準備
     with col2:
@@ -274,13 +274,13 @@ def show_user_guide():
         st.markdown("""
         <div class="guide-box">
         <h3>初めての方へ</h3>
-        <p>このアプリは3つのステップで使います：</p>
+        <p>このアプリは3つのステップで構成されています：</p>
         <ol>
             <li><strong>ホーム</strong>: アプリの説明を読む</li>
             <li><strong>モデル訓練</strong>: AIを準備する（1回だけ）</li>
             <li><strong>練習を始める</strong>: 実際に音声練習をする</li>
         </ol>
-        <p>まずは下の説明を読んで、アプリの目的を理解しましょう！</p>
+        <p>本アプリについて、まずは下の説明を読んでください</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -478,10 +478,15 @@ def main():
         # 次のステップガイド
         show_next_step_guide()
         
-        # 使い方の説明
-        if st.session_state.show_guide or st.button("📖 詳しい使い方を見る"):
+        # 使い方の説明ボタン
+        st.markdown("---")
+        if st.button("📖 詳しい使い方を見る", key="show_detailed_guide"):
+            st.session_state.show_guide = True
+
+        # 使い方ガイドの表示
+        if st.session_state.show_guide:
             st.markdown('<h3 class="sub-header">📖 使い方ガイド</h3>', unsafe_allow_html=True)
-            
+
             with st.expander("STEP 1: AIを準備する（最初に1回だけ）", expanded=True):
                 st.write("""
                 1. **「モデル訓練」ページに移動**
@@ -876,7 +881,7 @@ def main():
         if st.session_state.model_trained:
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("Aの再訓練", type="secondary"):
+                if st.button("AIモデルの再訓練", type="secondary"):
                     st.session_state.model_trained = False
                     st.rerun()
             with col2:
