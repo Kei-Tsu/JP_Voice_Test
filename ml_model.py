@@ -1,4 +1,5 @@
 import numpy as np
+import streamlit as st
 import librosa
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
@@ -7,7 +8,6 @@ from sklearn.metrics import classification_report, confusion_matrix
 import joblib
 import logging
 import pandas as pd
-import streamlit as st
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -80,25 +80,29 @@ class VoiceQualityModel:
 
             # 各クラスの数を確認
             unique_labels, counts = np.unique(y, return_counts=True)
-            st.write("- クラス別データ数:")
             for label, count in zip(unique_labels, counts):
                 st.write(f"  - {label}: {count}個")
-        
+            
+            # データを訓練用とテスト用に分割
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+            st.write(f"訓練データとテストデータに分割: {len(X_train)}訓練, {len(X_test)}テスト")
+            
+            # データクリーニング (NaNや無限大値の処理)
+            X_train_clean = np.nan_to_num(X_train, nan=0.0, posinf=0.0, neginf=0.0)
+            X_test_clean = np.nan_to_num(X_test, nan=0.0, posinf=0.0, neginf=0.0)
+            st.write(f"データクリーニング完了: 訓練{X_train_clean.shape}, テスト{X_test_clean.shape}")
+
+            # データの標準化(平均0, 標準偏差1)
+            X_train_scaled = self.scaler.fit_transform(X_train_clean)
+            X_test_scaled = self.scaler.transform(X_test_clean)
+            st.write(f"特徴量の標準化が完了")
+
             # データの検証
             if len(X) == 0 or len(y) == 0:
                 st.error("訓練データが空です")
                 logger.error("訓練データが空です")
                 return False
-            
-            # データを訓練用とテスト用に分割
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-            
-            st.write(f"訓練データとテストデータに分割: {len(X_train)}訓練, {len(X_test)}テスト")
-
-            # NaNや無限大値の処理
-            X_train_clean = np.nan_to_num(X_train, nan=0.0, posinf=0.0, neginf=0.0)
-            X_test_clean = np.nan_to_num(X_test, nan=0.0, posinf=0.0, neginf=0.0)
-            st.write(f"データクリーニング完了: 訓練{X_train_clean.shape}, テスト{X_test_clean.shape}")
 
             # データの標準化(平均0, 標準偏差1)
             X_train_scaled = self.scaler.fit_transform(X_train_clean)
@@ -131,8 +135,12 @@ class VoiceQualityModel:
 
             # クラスのリストを保存
             self.classes = self.model.classes_
+
+
             st.write(f"学習したクラス: {list(self.classes)}")
-            
+            self.is_trained = True
+            self.training_accuracy = train_accuracy
+            self.test_accuracy = test_accuracy
             # テストデータでの詳細な評価
             y_pred = self.model.predict(X_test_scaled)
 
@@ -169,19 +177,19 @@ class VoiceQualityModel:
             # 特徴量の重要度を取得
             importances = self.model.feature_importances_
             st.write(f"特徴量の重要度: {importances}")
-            importance_data = []
-            for name, importance in zip(self.feature_names[:len(importances)], importances):
-                importance_data.append([name, f"{importance:.3f}"])
+            importance_df = pd.DataFrame({
+                '特徴量': self.feature_names[:len(importances)],
+                '重要度': [f"{imp:.3f}" for imp in importances]
+            }).sort_values('重要度', ascending=False)
 
-            # 表形式で表示
-            importance_df = pd.DataFrame(importance_data, columns=['特徴量', '重要度'])
-            importance_df = importance_df.sort_values(by='重要度', ascending=False)
             st.dataframe(importance_df)
 
             # 最も重要な特徴量を強調する
             top_features = importance_df.iloc[:3]['特徴量']
             st.info(f"**最重要特徴量**: {', '.join(top_features)} - この特徴がAIの判断に最も影響しています")
-            
+
+            return True         
+                  
             # 訓練済みフラグを設定
             self.is_trained = True
             self.training_accuracy = train_accuracy
@@ -389,21 +397,3 @@ def create_dataset_from_files(file_paths):
         logger.error(f"ファイルからのデータセット作成エラー: {e}")
         return np.array([]), np.array([])
 
-# リアルタイム音声品質評価用のヘルパー関数
-def quick_quality_assessment(features_dict):
-    """軽量な音声品質評価（機械学習なし）"""
-    try:
-        drop_rate = features_dict.get('end_drop_rate', 0)
-        mean_volume = features_dict.get('mean_volume', 0)
-        
-        # 簡単なルールベース評価
-        if drop_rate < 0.15 and mean_volume > 0.05:
-            return "良好", 0.9
-        elif drop_rate < 0.3:
-            return "普通", 0.7
-        else:
-            return "要改善", 0.5
-            
-    except Exception as e:
-        logger.error(f"品質評価エラー: {e}")
-        return "評価不可", 0.0
