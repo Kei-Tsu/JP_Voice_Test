@@ -860,7 +860,6 @@ def show_context_aware_practice_hints(features, evaluation):
 
     if page == "モデル訓練":
         st.markdown('<h2 class="sub-header">AI訓練と評価</h2>', unsafe_allow_html=True)
-        
         # モデル訓練の説明
         st.markdown("""
         <div class="info-box">
@@ -870,6 +869,18 @@ def show_context_aware_practice_hints(features, evaluation):
         <p><strong>※ 初回利用時は必ずAI訓練を実行してください。</strong></p>
         </div>
         """, unsafe_allow_html=True)
+
+# ===== ここに基本テストを追加 =====
+def test_basic_functionality():
+
+        if st.button("🔍 基本機能テスト実行", key="basic_test"):
+            if test_basic_functionality():
+                st.info("基本機能は正常です。AI訓練に進むことができます。")
+            else:
+                st.error("基本機能に問題があります。まずこれを解決する必要があります。")
+        
+        st.markdown("---")
+# ===== ここまで =====
 
         # 訓練前後の状態表示
         col1, col2 = st.columns(2)
@@ -1020,7 +1031,7 @@ def show_context_aware_practice_hints(features, evaluation):
 
 
     # アプリケーション終了時のクリーンアップ処理
-    if st.session_state.get('temp_audio_file') and os.path.exists(st.session_state.temp_audio_file):
+if st.session_state.get('temp_audio_file') and os.path.exists(st.session_state.temp_audio_file):
         try:
             os.unlink(st.session_state.temp_audio_file)
         except Exception as e:
