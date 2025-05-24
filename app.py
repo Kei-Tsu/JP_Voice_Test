@@ -489,7 +489,7 @@ def main():
 
             with st.expander("STEP 1: AIを準備する（最初に1回だけ）", expanded=True):
                 st.write("""
-                1. **「モデル訓練」ページに移動**
+                1. **左メニューから「モデル訓練」ページに移動**
                 2. **「モデル訓練を開始」ボタンをクリック**
                 3. **AIが学習を完了するまで待つ（約1-2分）**
                 4. **特徴量の重要度グラフを確認**
@@ -499,7 +499,7 @@ def main():
             
             with st.expander("STEP 2: 音声で練習する"):
                 st.write("""
-                1. **「練習を始める」ページに移動**
+                1. **左メニューから「練習を始める」ページに移動**
                 2. **会話カテゴリとサンプル文を選択**
                 3. **音声ファイルをアップロードまたは録音**
                 4. **分析結果とアドバイスを確認**
@@ -521,7 +521,7 @@ def main():
             if st.button("ガイドを完了する"):
                 st.session_state.user_guide_completed = True
                 st.session_state.first_visit = False
-                st.success("ガイド完了！さっそく「モデル訓練」から始めましょう！")
+                st.success("さっそく左のメニューの「モデル訓練」から始めましょう！")
 
     elif page == "練習を始める":
         st.markdown('<h2 class="sub-header">音声練習</h2>', unsafe_allow_html=True)
@@ -1002,7 +1002,7 @@ def main():
 
 
 
-    """アプリケーション終了時のクリーンアップ処理"""
+    # アプリケーション終了時のクリーンアップ処理
     if st.session_state.get('temp_audio_file') and os.path.exists(st.session_state.temp_audio_file):
         try:
             os.unlink(st.session_state.temp_audio_file)
