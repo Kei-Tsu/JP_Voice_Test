@@ -11,10 +11,9 @@ import pandas as pd
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
-# 必要なクラスと関数を実装
+
 class VoiceQualityModel:
     """音声品質を評価する機械学習モデル
-
     このクラスは音声の特徴量から会話音声の品質を判断するAIモデルです。
     主に「良好」「文末が弱い」「小声すぎる」の3つのカテゴリに分類します。
     """
@@ -51,7 +50,6 @@ class VoiceQualityModel:
             'speech_rate'
         ]
 
-        # 特徴ベクトルの作成
         features = []
         for key in feature_keys:
             if key in features_dict:
@@ -75,8 +73,14 @@ class VoiceQualityModel:
             bool: 訓練が成功したかどうか
         """
         try:
-            st.write(f"**訓練データ詳細**")
-            st.write(f"- 総サンプル数: {len(X)}")
+            #データの検証（最初に実行）
+            if len(X) == 0 or len(y) ==0:
+                st.error("訓練データが空です")
+                logger.errror(f"訓練データが空です")
+                return False
+            
+            st.write("**AI訓練を開始します**")
+            st.write(f"総サンプル数: {len(X)}")           
 
             # 各クラスの数を確認
             unique_labels, counts = np.unique(y, return_counts=True)
@@ -84,32 +88,24 @@ class VoiceQualityModel:
                 st.write(f"  - {label}: {count}個")
             
             # データを訓練用とテスト用に分割
+            st.write("データを訓練用とテスト用に分割中...")
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-            st.write(f"訓練データとテストデータに分割: {len(X_train)}訓練, {len(X_test)}テスト")
+            st.write(f"データ分割完了: 訓練{len(X_train)}個, テスト{len(X_test)}個")
             
             # データクリーニング (NaNや無限大値の処理)
             X_train_clean = np.nan_to_num(X_train, nan=0.0, posinf=0.0, neginf=0.0)
             X_test_clean = np.nan_to_num(X_test, nan=0.0, posinf=0.0, neginf=0.0)
-            st.write(f"データクリーニング完了: 訓練{X_train_clean.shape}, テスト{X_test_clean.shape}")
+            st.write(f"データクリーニング完了")
 
             # データの標準化(平均0, 標準偏差1)
-            X_train_scaled = self.scaler.fit_transform(X_train_clean)
-            X_test_scaled = self.scaler.transform(X_test_clean)
-            st.write(f"特徴量の標準化が完了")
-
-            # データの検証
-            if len(X) == 0 or len(y) == 0:
-                st.error("訓練データが空です")
-                logger.error("訓練データが空です")
-                return False
-
-            # データの標準化(平均0, 標準偏差1)
+            st.write("特徴量の標準化中...")
             X_train_scaled = self.scaler.fit_transform(X_train_clean)
             X_test_scaled = self.scaler.transform(X_test_clean)
             st.write(f"特徴量の標準化が完了")
 
             # ランダムフォレスト分類器を作成
+            st.write("AIモデル作成中...")
             self.model = RandomForestClassifier(
                 n_estimators=100,  # 決定木の数
                 max_depth=10,      # 木の最大深さ
@@ -123,26 +119,34 @@ class VoiceQualityModel:
 
             # モデルの訓練
             st.write("**学習を開始しています...**")
+            
+            # プログレスバーを表示
+            progress_bar = st.progress(0)
+            progress_bar.progress(50)            
+            
             self.model.fit(X_train_scaled, y_train)
-            st.write("**学習が完了しました！**")
+            st.write("**AI学習が完了しました！**")
 
             # 訓練データとテストデータでの精度を確認
+            st.write("精度評価中...")
             train_accuracy = self.model.score(X_train_scaled, y_train)
             test_accuracy = self.model.score(X_test_scaled, y_test)
 
             st.success(f"訓練データでの精度: {train_accuracy:.1%}")
             st.success(f"テストデータでの精度: {test_accuracy:.1%}")
 
-            # クラスのリストを保存
-            self.classes = self.model.classes_
-
-
-            st.write(f"学習したクラス: {list(self.classes)}")
+            # クラス情報を保存
+            self.classes = self.model.classes
             self.is_trained = True
             self.training_accuracy = train_accuracy
             self.test_accuracy = test_accuracy
+            
+            st.write(f"学習したクラス: {list(self.classes)}")
+
             # テストデータでの詳細な評価
+            st.write("詳細な評価結果を計算中...")
             y_pred = self.model.predict(X_test_scaled)
+            report = classification_report(y_test, y_pred, target_names=unique_labels, output_dict=True)
 
             # 分類レポートを表示
             st.write("**詳細な評価結果:**")
@@ -158,51 +162,47 @@ class VoiceQualityModel:
 
             # 全体の性能を表示(マクロ平均)
             macro_avg = report['macro avg']
-            weighted_avg = report['weighted avg']
-
+            st.write(f"**全体F1スコア**: {macro_avg['f1-score']:.2f}")          
             st.write("**全体の性能を表示(マクロ平均)**:")
-            st.write(f"- **マクロ平均**: 精度={macro_avg['precision']:.2f}, 再現率={macro_avg['recall']:.2f}, F1スコア={macro_avg['f1-score']:.2f}")
-            st.write(f"- **加重平均**: 精度={weighted_avg['precision']:.2f}, 再現率={weighted_avg['recall']:.2f}, F1スコア={weighted_avg['f1-score']:.2f}")
-
+ 
             # 性能の解釈
             if macro_avg['f1-score'] >= 0.8:
                 st.success("モデルの性能は良好です！各クラスをバランスよく予測できています。")
             elif macro_avg['f1-score'] >= 0.7:
-                st.warning("モデルの性能は普通です。実用なレベルに達しています。")
+                st.info("モデルの性能は普通です。実用なレベルに達しています。")
             elif macro_avg['f1-score'] >= 0.6:
                 st.warning("モデルの性能は普通です。改善の余地があります。")
             else:
                 st.error("モデルの性能は低いです。データの質や量を見直す必要があります。")               
                             
             # 特徴量の重要度を取得
+            st.write("特徴量の重要度を分析中...")
             importances = self.model.feature_importances_
-            st.write(f"特徴量の重要度: {importances}")
             importance_df = pd.DataFrame({
                 '特徴量': self.feature_names[:len(importances)],
                 '重要度': [f"{imp:.3f}" for imp in importances]
             }).sort_values('重要度', ascending=False)
 
+            st.write("**特徴量の重要度:**")
             st.dataframe(importance_df)
 
-            # 最も重要な特徴量を強調する
-            top_features = importance_df.iloc[:3]['特徴量']
+            # 最重要特徴量を強調
+            top_features = importance_df.iloc[:3]['特徴量'].tolist()
             st.info(f"**最重要特徴量**: {', '.join(top_features)} - この特徴がAIの判断に最も影響しています")
 
+            # プログレスバーをクリア
+            progress_bar.empty()
+            
+            st.success("**AI訓練が完全に完了しました！** これで「練習を始める」ページで高精度な音声分析が利用できます。")
+            
+            logger.info(f"モデル訓練完了: {len(X)}サンプル, {len(self.classes)}クラス")            
             return True         
                   
-            # 訓練済みフラグを設定
-            self.is_trained = True
-            self.training_accuracy = train_accuracy
-            self.test_accuracy = test_accuracy
-
-            logger.info(f"モデル訓練完了: {len(X)}サンプル, {len(self.classes)}クラス")
-            return True
-        
         except Exception as e:
-            st.error(f"モデル訓練エラー: {e}")
-            logger.error(f"モデル訓練エラー: {e}")
-            return False
-        
+            st.error(f"AI訓練エラー: {e}")
+            logger.error(f"訓練エラー: {e}")
+            return False            
+                       
     def predict(self, features_dict):
         """音声品質を予測する
         引数:
@@ -272,7 +272,6 @@ class VoiceQualityModel:
                 }
         return None
 
- 
 # クラス外の独立した関数として定義
 def generate_training_data():
     """機械学習用のシミュレーションデータを生成する関数
@@ -300,7 +299,6 @@ def generate_training_data():
                 np.random.uniform(1200, 2200),   # spectral_centroid_mean
                 np.random.uniform(2.5, 4.5),     # speech_rate
             ]
-
             x.append(features)
             y.append("良好")  
 
