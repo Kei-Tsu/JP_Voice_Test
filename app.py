@@ -70,6 +70,8 @@ if 'page' not in st.session_state:
 # 機械学習関連：音声分析モデルの初期化
 if 'ml_model' not in st.session_state:
     st.session_state.ml_model = VoiceQualityModel()  # 音声品質モデルのインスタンス
+    print("音声品質モデルのインスタンスを作成しました。")
+
 if 'model_trained' not in st.session_state:
     st.session_state.model_trained = False  # モデルの訓練状態
 
@@ -638,6 +640,8 @@ def main():
                                 ml_prediction, ml_confidence = None, 0
                                 ml_success = False
                                 st.error(f"AI分析エラー: {ml_error}")
+                                # エラーの詳細をログに出力
+                                logger.error(f"AI分析の詳細エラー: {ml_error}", exc_info=True)
                         else:
                             ml_prediction, ml_confidence = None, 0
                             ml_success = False
@@ -734,7 +738,7 @@ def main():
                 
                             with col2:
                                 st.markdown('<div class="metric-container">', unsafe_allow_html=True)
-                                st.subheader("📝 アドバイス")
+                                st.subheader("アドバイス")
                                 st.write(rule_based_evaluation['advice'])
                                 st.markdown('</div>', unsafe_allow_html=True)
                 
@@ -742,7 +746,7 @@ def main():
                             if not ml_available:
                                 st.markdown("""
                                 <div class="next-step">
-                                <h4>🎯 より正確な分析のために</h4>
+                                <h4>より正確な分析のために</h4>
                                 <p>「モデル訓練」ページでAIを訓練すると、より精密な分析が可能になります。</p>
                                 </div>
                                 """, unsafe_allow_html=True)
