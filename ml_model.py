@@ -37,13 +37,7 @@ class VoiceQualityModel:
 
     def prepare_features(self, features_dict):
         """特徴辞書から機械学習用の特徴量配列を作成"""
-        """
-        features_dict (dict): voice_analysis.py からの特徴量の辞書
-        Returns:
-            list: 機械学習モデル用の特徴量リスト(10個)
-        """
-        # 使用する特徴量のキー(voice_analysis.py からの辞書)
-        # 主要な特徴量のリスト
+        # 使用する特徴量のキー：voice_analysis.py からの辞書
         feature_keys = [
             'mean_volume', 
             'std_volume', 
@@ -71,9 +65,7 @@ class VoiceQualityModel:
                 features.append(0.0) # 特徴値が存在しない場合デフォルト値0で埋めるため追加
     
             return features
-        
-
-
+      
     def train(self, X, y):
         """モデルを訓練する
         引数:
@@ -299,98 +291,99 @@ class VoiceQualityModel:
             logger.error(f"モデル保存エラー: {e}")
             return False
         
-        def load_model(self,file_path):
-            """保存されたモデルを読み込む
-            引数:
-                file_path (str): 読み込み元のファイルパス
-            """
-            try:
-                # モデルを読み込む
-                model_info = joblib.load(file_path)
-
-                self.model = model_info['model']
-                self.scaler = model_info['scaler']
-                self.is_trained = model_info['is_trained']
-                self.classes = model_info['classes']
-                self.feature_names = model_info.get('feature_names', self.feature_names)
-                self.training_accuracy = model_info.get('training_accuracy', 0)
-
-                logger.info(f"モデルを読み込みました: {file_path}")
-                return True
-            
-            except Exception as e:
-                logger.error(f"モデル読み込みエラー: {e}")
-                return False
-            
-    def generate_training_data():
-        """機械学習用のシミュレーションデータを生成する関数
+    def load_model(self,file_path):
+        """保存されたモデルを読み込む
         引数:
-            なし
-        戻り値:
-            tuple: 特徴量データとラベル
+        file_path (str): 読み込み元のファイルパス
         """
         try:
-            x = []  # 特徴量データ
-            y = []  # ラベルデータ
+            # モデルを読み込む
+            model_info = joblib.load(file_path)
 
-            # シミュレーションデータを生成
-            for i in range(80):
-                features = [
-                    np.random.uniform(0.08, 0.25),   # mean_volume
-                    np.random.uniform(0.015, 0.04),   # std_volume
-                    np.random.uniform(0.08, 0.25),     # start_volume
-                    np.random.uniform(0.08, 0.25),     # middle_volume
-                    np.random.uniform(0.07, 0.22),   # end_volume（そこまで低下しない）
-                    np.random.uniform(0.03, 0.12),   # end_drop_rate（小さめ）
-                    np.random.uniform(0.07, 0.22),   # last_20_percent_volume
-                    np.random.uniform(0.03, 0.12),   # last_20_percent_drop_rate
-                    np.random.uniform(1200, 2200),   # spectral_centroid_mean
-                    np.random.uniform(2.5, 4.5),     # speech_rate
-                ]
+            self.model = model_info['model']
+            self.scaler = model_info['scaler']
+            self.is_trained = model_info['is_trained']
+            self.classes = model_info['classes']
+            self.feature_names = model_info.get('feature_names', self.feature_names)
+            self.training_accuracy = model_info.get('training_accuracy', 0)
 
-                x.append(features)
-                y.append("良好")  
-
-            # 「文末が弱い」音声のデータ
-            for i in range(80):
-                features = [
-                    np.random.uniform(0.08, 0.25),   # mean_volume
-                    np.random.uniform(0.015, 0.04),   # std_volume
-                    np.random.uniform(0.08, 0.25),     # start_volume
-                    np.random.uniform(0.08, 0.25),     # middle_volume
-                    np.random.uniform(0.02, 0.08),      # end_volume（明らかに低い）
-                    np.random.uniform(0.25, 0.6),      # end_drop_rate（大きい）
-                    np.random.uniform(0.02, 0.08),      # last_20_percent_volume
-                    np.random.uniform(0.25, 0.6),      # last_20_percent_drop_rate
-                    np.random.uniform(1000, 2000),     # spectral_centroid_mean
-                    np.random.uniform(2, 4),           # speech_rate
-                ]
-                x.append(features)
-                y.append("文末が弱い")
-
-            # 「小声すぎる」音声のデータ
-            for _ in range(50): 
-                features = [
-                    np.random.uniform(0.005, 0.04),  # mean_volume（全体的に小さい）
-                    np.random.uniform(0.005, 0.015), # std_volume
-                    np.random.uniform(0.005, 0.04),  # start_volume
-                    np.random.uniform(0.005, 0.04),  # middle_volume
-                    np.random.uniform(0.003, 0.025), # end_volume
-                    np.random.uniform(0.1, 0.35),    # end_drop_rate
-                    np.random.uniform(0.003, 0.025), # last_20_percent_volume
-                    np.random.uniform(0.1, 0.35),    # last_20_percent_drop_rate
-                    np.random.uniform(800, 1400),    # spectral_centroid_mean（低め）
-                    np.random.uniform(1.5, 3),       # speech_rate（遅め）        
-                ]
-                x.append(features)
-                y.append("小声すぎる")
-
-            logger.info(f"訓練データを生成しました: {len(x)}サンプル")
-            return np.array(x), np.array(y)
-
+            logger.info(f"モデルを読み込みました: {file_path}")
+            return True
+            
         except Exception as e:
-            logger.error(f"訓練データ生成エラー: {e}")
-            return np.array([]), np.array([])
+            logger.error(f"モデル読み込みエラー: {e}")
+            return False
+
+# クラス外の独立した関数として定義
+def generate_training_data():
+    """機械学習用のシミュレーションデータを生成する関数
+    引数:
+        なし
+    戻り値:
+        tuple: 特徴量データとラベル
+    """
+    try:
+        x = []  # 特徴量データ
+        y = []  # ラベルデータ
+
+        # シミュレーションデータを生成
+        for i in range(80):
+            features = [
+                np.random.uniform(0.08, 0.25),   # mean_volume
+                np.random.uniform(0.015, 0.04),   # std_volume
+                np.random.uniform(0.08, 0.25),     # start_volume
+                np.random.uniform(0.08, 0.25),     # middle_volume
+                np.random.uniform(0.07, 0.22),   # end_volume（そこまで低下しない）
+                np.random.uniform(0.03, 0.12),   # end_drop_rate（小さめ）
+                np.random.uniform(0.07, 0.22),   # last_20_percent_volume
+                np.random.uniform(0.03, 0.12),   # last_20_percent_drop_rate
+                np.random.uniform(1200, 2200),   # spectral_centroid_mean
+                np.random.uniform(2.5, 4.5),     # speech_rate
+            ]
+
+            x.append(features)
+            y.append("良好")  
+
+        # 「文末が弱い」音声のデータ
+        for i in range(80):
+            features = [
+                np.random.uniform(0.08, 0.25),   # mean_volume
+                np.random.uniform(0.015, 0.04),   # std_volume
+                np.random.uniform(0.08, 0.25),     # start_volume
+                np.random.uniform(0.08, 0.25),     # middle_volume
+                np.random.uniform(0.02, 0.08),      # end_volume（明らかに低い）
+                np.random.uniform(0.25, 0.6),      # end_drop_rate（大きい）
+                np.random.uniform(0.02, 0.08),      # last_20_percent_volume
+                np.random.uniform(0.25, 0.6),      # last_20_percent_drop_rate
+                np.random.uniform(1000, 2000),     # spectral_centroid_mean
+                np.random.uniform(2, 4),           # speech_rate
+            ]
+            x.append(features)
+            y.append("文末が弱い")
+
+        # 「小声すぎる」音声のデータ
+        for _ in range(50): 
+            features = [
+                np.random.uniform(0.005, 0.04),  # mean_volume（全体的に小さい）
+                np.random.uniform(0.005, 0.015), # std_volume
+                np.random.uniform(0.005, 0.04),  # start_volume
+                np.random.uniform(0.005, 0.04),  # middle_volume
+                np.random.uniform(0.003, 0.025), # end_volume
+                np.random.uniform(0.1, 0.35),    # end_drop_rate
+                np.random.uniform(0.003, 0.025), # last_20_percent_volume
+                np.random.uniform(0.1, 0.35),    # last_20_percent_drop_rate
+                np.random.uniform(800, 1400),    # spectral_centroid_mean（低め）
+                np.random.uniform(1.5, 3),       # speech_rate（遅め）        
+            ]
+            x.append(features)
+            y.append("小声すぎる")
+
+        logger.info(f"訓練データを生成しました: {len(x)}サンプル")
+        return np.array(x), np.array(y)
+
+    except Exception as e:
+        logger.error(f"訓練データ生成エラー: {e}")
+        return np.array([]), np.array([])
 
 # データセット保存・読み込み機能
 def save_training_data(X, y, file_path):
