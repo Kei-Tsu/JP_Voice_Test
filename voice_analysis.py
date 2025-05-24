@@ -174,8 +174,9 @@ def plot_audio_analysis(features, audio_data, sr):
         return fig
     except Exception as e:
         fig, ax = plt.subplots(figsize=(10, 4))
-        ax.text(0.5, 0.5, '音声データがありません', fontsize=12, ha='center')
-        ax.set_title('Volume Change Over Time')
+        ax.text(0.5, 0.5, f'音声分析エラー: {e}', fontsize=12, ha='center')
+        ax.set_title('音声分析エラー')
+        ax.set_xlabel('音声データがありません')
         plt.tight_layout()
         return fig
 
@@ -183,7 +184,7 @@ def plot_audio_analysis(features, audio_data, sr):
 def evaluate_clarity(features):
     """音量特徴からクリアな発話かどうかを評価する関数"""
     try:
-        drop_rate = features["end_drop_rate"]
+        drop_rate = features.get("end_drop_rate", 0)
         last_20_drop_rate = features.get("last_20_percent_drop_rate", 0)  # キーがない場合は0
 
         # 両方のドロップ率を考慮した評価
