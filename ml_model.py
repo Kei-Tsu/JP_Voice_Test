@@ -64,7 +64,7 @@ class VoiceQualityModel:
             else:
                 features.append(0.0) # 特徴値が存在しない場合デフォルト値0で埋めるため追加
     
-            return features
+        return features
       
     def train(self, X, y):
         """モデルを訓練する
@@ -136,7 +136,7 @@ class VoiceQualityModel:
             report = classification_report(y_test, y_pred, target_names=self.classes, output_dict=True)
 
             # 各クラスの性能を表示
-            for class_name in self.model.classea_:
+            for class_name in unique_labels:
                 if class_name in report:
                     precision = report[class_name]['precision']
                     recall = report[class_name]['recall']
@@ -177,12 +177,14 @@ class VoiceQualityModel:
             importance_df = importance_df.sort_values(by='重要度', ascending=False)
             st.dataframe(importance_df)
 
-            # 最も重要な特徴量を強調
+            # 最も重要な特徴量を強調する
             top_features = importance_df.iloc[:3]['特徴量']
             st.info(f"**最重要特徴量**: {', '.join(top_features)} - この特徴がAIの判断に最も影響しています")
             
             # 訓練済みフラグを設定
             self.is_trained = True
+            self.training_accuracy = train_accuracy
+            self.test_accuracy = test_accuracy
 
             logger.info(f"モデル訓練完了: {len(X)}サンプル, {len(self.classes)}クラス")
             return True
