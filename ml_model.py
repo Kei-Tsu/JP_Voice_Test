@@ -1,11 +1,9 @@
 import numpy as np
 import streamlit as st
-import librosa
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
-import joblib
 import logging
 import pandas as pd
 
@@ -13,10 +11,8 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 class VoiceQualityModel:
-    """音声品質を評価する機械学習モデル
-    このクラスは音声の特徴量から会話音声の品質を判断するAIモデルです。
-    主に「良好」「文末が弱い」「小声すぎる」の3つのカテゴリに分類します。
-    """
+    """音声品質を評価する機械学習モデル"""
+    
     def __init__(self):
         """モデルの初期化"""
         self.model = None # ランダムフォレストモデル
@@ -65,18 +61,12 @@ class VoiceQualityModel:
         return features
       
     def train(self, X, y):
-        """モデルを訓練する
-        引数:
-            X (np.ndarray): 特徴量
-            y (np.ndarray): ラベル
-        Returns:
-            bool: 訓練が成功したかどうか
-        """
+        """モデルを訓練する"""
         try:
             #データの検証（最初に実行）
             if len(X) == 0 or len(y) ==0:
                 st.error("訓練データが空です")
-                logger.errror(f"訓練データが空です")
+                logger.error(f"訓練データが空です")
                 return False
             
             st.write("**AI訓練を開始します**")
@@ -84,6 +74,7 @@ class VoiceQualityModel:
 
             # 各クラスの数を確認
             unique_labels, counts = np.unique(y, return_counts=True)
+            st.write("クラス別データ数:")
             for label, count in zip(unique_labels, counts):
                 st.write(f"  - {label}: {count}個")
             
@@ -94,6 +85,7 @@ class VoiceQualityModel:
             st.write(f"データ分割完了: 訓練{len(X_train)}個, テスト{len(X_test)}個")
             
             # データクリーニング (NaNや無限大値の処理)
+            st.write("データクリーニング中...")
             X_train_clean = np.nan_to_num(X_train, nan=0.0, posinf=0.0, neginf=0.0)
             X_test_clean = np.nan_to_num(X_test, nan=0.0, posinf=0.0, neginf=0.0)
             st.write(f"データクリーニング完了")
@@ -136,7 +128,7 @@ class VoiceQualityModel:
             st.success(f"テストデータでの精度: {test_accuracy:.1%}")
 
             # クラス情報を保存
-            self.classes = self.model.classes
+            self.classes = self.model.classes_
             self.is_trained = True
             self.training_accuracy = train_accuracy
             self.test_accuracy = test_accuracy
@@ -148,11 +140,8 @@ class VoiceQualityModel:
             y_pred = self.model.predict(X_test_scaled)
             report = classification_report(y_test, y_pred, target_names=unique_labels, output_dict=True)
 
-            # 分類レポートを表示
-            st.write("**詳細な評価結果:**")
-            report = classification_report(y_test, y_pred, target_names=unique_labels, output_dict=True)
-
             # 各クラスの性能を表示
+            st.write("**各クラスの性能:**")
             for class_name in unique_labels:
                 if class_name in report:
                     precision = report[class_name]['precision']
@@ -163,8 +152,7 @@ class VoiceQualityModel:
             # 全体の性能を表示(マクロ平均)
             macro_avg = report['macro avg']
             st.write(f"**全体F1スコア**: {macro_avg['f1-score']:.2f}")          
-            st.write("**全体の性能を表示(マクロ平均)**:")
- 
+            
             # 性能の解釈
             if macro_avg['f1-score'] >= 0.8:
                 st.success("モデルの性能は良好です！各クラスをバランスよく予測できています。")
@@ -204,13 +192,7 @@ class VoiceQualityModel:
             return False            
                        
     def predict(self, features_dict):
-        """音声品質を予測する
-        引数:
-            features_dict (dict): voice_analysis.py からの特徴量の辞書
-        
-        戻り値
-            tuple: 予測結果と信頼度
-        """
+        """音声品質を予測する"""
         try:
             if not self.is_trained or self.model is None:
                 logger.warning("モデルが訓練されていません")
@@ -242,10 +224,7 @@ class VoiceQualityModel:
             return None, 0
         
     def get_feature_importance(self):
-        """特徴量の重要度を取得
-        戻り値:
-            dict: 特徴量の重要度
-        """
+        """特徴量の重要度を取得"""
         try:
             if not self.is_trained or self.model is None:
                 return None
@@ -259,10 +238,7 @@ class VoiceQualityModel:
             return None
 
     def get_model_performance(self):
-        """モデルの性能を取得
-        戻り値:
-            dict: モデルの性能情報
-        """
+        """モデルの性能を取得"""
         if self.is_trained:
                 return {
                     'training_accuracy': self.training_accuracy,
@@ -274,12 +250,7 @@ class VoiceQualityModel:
 
 # クラス外の独立した関数として定義
 def generate_training_data():
-    """機械学習用のシミュレーションデータを生成する関数
-    引数:
-        なし
-    戻り値:
-        tuple: 特徴量データとラベル
-    """
+    """機械学習用のシミュレーションデータを生成する関数"""
     try:
         x = []  # 特徴量データ
         y = []  # ラベルデータ
@@ -344,15 +315,7 @@ def generate_training_data():
         return np.array([]), np.array([])
    
 def quick_quality_assessment(features_dict):
-    """軽量な音声品質評価（機械学習なし）
-    機械学習モデルが利用できない場合の簡易評価。
-    ルールベースで会話の品質を評価します。
-
-    引数:
-        features_dict (dict): 音声特徴量の辞書
-    戻り値:
-        tuple: 評価結果と信頼度
-        """
+    """軽量な音声品質評価（機械学習なし）"""
     try:
         drop_rate = features_dict.get('end_drop_rate', 0)
         mean_volume = features_dict.get('mean_volume', 0)
@@ -375,23 +338,23 @@ def quick_quality_assessment(features_dict):
         logger.error(f"品質評価エラー: {e}")
         return "評価不可", 0.0
     
-def create_dataset_from_files(file_paths):
-    """音声ファイルからデータセットを作成する関数（将来の拡張用）"""
-    """
-    この関数は将来、実際の音声ファイルから特徴量を抽出して
-    データセットを作成するために使用できます。
-    現在はプレースホルダーとして空の実装になっています。
-    """
-    try:
+# def create_dataset_from_files(file_paths):
+    # """音声ファイルからデータセットを作成する関数（将来の拡張用）"""
+    # """
+    # この関数は将来、実際の音声ファイルから特徴量を抽出して
+    # データセットを作成するために使用できます。
+    # 現在はプレースホルダーとして空の実装になっています。
+    # """
+    # try:
         # 将来の実装:
         # 1. 各音声ファイルから特徴量を抽出
         # 2. ラベルを設定（ファイル名やメタデータから）
         # 3. 特徴量とラベルをまとめてデータセットを作成
         
-        logger.info("音声ファイルからのデータセット作成は今後実装予定です")
-        return np.array([]), np.array([])
+    #    logger.info("音声ファイルからのデータセット作成は今後実装予定です")
+    #    return np.array([]), np.array([])
         
-    except Exception as e:
-        logger.error(f"ファイルからのデータセット作成エラー: {e}")
-        return np.array([]), np.array([])
+    #except Exception as e:
+    #    logger.error(f"ファイルからのデータセット作成エラー: {e}")
+    #    return np.array([]), np.array([])
 
