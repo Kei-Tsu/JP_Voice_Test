@@ -45,7 +45,7 @@ class VoiceQualityModel:
             'spectral_centroid_mean',
             'speech_rate'
         ]
-
+        
         features = []
         for key in feature_keys:
             if key in features_dict:

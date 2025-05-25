@@ -52,6 +52,53 @@ try:
 except ImportError:
     pass
 
+#デバッグ関連用
+def test_basic_functionality():
+    """基本機能のテスト"""
+    st.write("🔍 **基本機能テスト開始**")
+    
+    try:
+        # 1. Numpyテスト
+        import numpy as np
+        test_array = np.array([1, 2, 3])
+        st.write(f"✅ Numpy動作確認: {test_array}")
+        
+        # 2. Pandasテスト
+        import pandas as pd
+        test_df = pd.DataFrame({'a': [1, 2], 'b': [3, 4]})
+        st.write(f"✅ Pandas動作確認: shape={test_df.shape}")
+        
+        # 3. Scikit-learnテスト
+        from sklearn.ensemble import RandomForestClassifier
+        test_model = RandomForestClassifier(n_estimators=2, random_state=42)
+        st.write("✅ Scikit-learn動作確認: RandomForest作成成功")
+        
+        # 4. 簡単な機械学習テスト
+        X_simple = np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
+        y_simple = np.array(['A', 'A', 'B', 'B'])
+        test_model.fit(X_simple, y_simple)
+        prediction = test_model.predict([[2, 3]])
+        st.write(f"✅ 機械学習テスト成功: 予測結果={prediction[0]}")
+        
+        # 5. セッション状態テスト
+        if 'test_counter' not in st.session_state:
+            st.session_state.test_counter = 0
+        st.session_state.test_counter += 1
+        st.write(f"✅ セッション状態テスト: カウンター={st.session_state.test_counter}")
+        
+        st.success("🎉 **すべての基本機能が正常に動作しています！**")
+        return True
+        
+    except Exception as e:
+        st.error(f"❌ **基本機能テストエラー**: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+        return False
+
+# デバッグ関連終了
+
+
+
 
 # セッション状態の初期化
 if 'volume_history' not in st.session_state:
@@ -860,6 +907,21 @@ def show_context_aware_practice_hints(features, evaluation):
 
     if page == "モデル訓練":
         st.markdown('<h2 class="sub-header">AI訓練と評価</h2>', unsafe_allow_html=True)
+ # ===== 基本機能テスト追加（ここから） =====
+        st.markdown('<h3 class="sub-header">🔍 事前チェック</h3>', unsafe_allow_html=True)
+        
+        if st.button("🔍 基本機能テスト実行", key="basic_test"):
+            if test_basic_functionality():
+                st.info("✅ 基本機能は正常です。AI訓練に進むことができます。")
+            else:
+                st.error("❌ 基本機能に問題があります。まずこれを解決する必要があります。")
+                st.write("**推奨対応:**")
+                st.write("1. ページを再読み込みしてください")
+                st.write("2. requirements.txtを確認してください")
+                st.write("3. ブラウザのキャッシュをクリアしてください")
+        
+        st.markdown("---")
+        # ===== 基本機能テスト追加（ここまで） =====
         
         # モデル訓練の説明
         st.markdown("""
