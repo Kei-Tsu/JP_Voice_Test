@@ -293,7 +293,7 @@ def plot_audio_analysis(features, audio_data, sr):
         plt.tight_layout()
         return fig
 
-def evaluate_clarity(features):
+(features):
     """音量特徴からクリアな発話かどうかを評価する関数（録音ソース考慮）"""
     try:
         drop_rate = features.get("end_drop_rate", 0)
