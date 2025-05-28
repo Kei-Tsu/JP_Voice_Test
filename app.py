@@ -13,7 +13,7 @@ import asyncio
 import logging
 from pydub import AudioSegment
 import matplotlib.pyplot as plt
-plt.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Tahoma']
+plt.rcParams['font.family'] = ['DejaVu Sans', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', 'Takao', 'IPAexGothic', 'IPAPGothic', 'VL PGothic', 'Noto Sans CJK JP']
 
 # アプリケーション設定
 st.set_page_config(
@@ -488,19 +488,19 @@ def handle_file_upload(feature_extractor):
                     logger.warning(f"一時ファイル削除エラー: {cleanup_error}")
 
 def analyze_audio_with_context(feature_extractor, y, sr, recording_source, conversation_context):
-    """録音環境と会話コンテキストを考慮した音声分析"""
+    """録音環境と会話の場面を考慮した音声分析"""
     
     # 録音ソースを特徴抽出に渡す
     features = feature_extractor.extract_features(y, sr, recording_source)
     
-    # 会話コンテキストを特徴に追加
+    # 会話の場面を特徴に追加
     features['conversation_context'] = conversation_context
     
     # 練習回数をカウント
     st.session_state.practice_count += 1
     
     # コンテキスト情報の表示
-    st.markdown('### 録音・会話環境')
+    st.markdown('### 録音・会話場面')
     
     st.info(f"**録音方法**: {recording_source}")
     st.info(f"**会話レベル**: {conversation_context}")
@@ -529,7 +529,7 @@ def analyze_audio_with_context(feature_extractor, y, sr, recording_source, conve
     display_comprehensive_analysis_with_context(features)
 
 def display_volume_analysis_with_context(features):
-    """コンテキスト考慮の音量分析表示"""
+    """録音環境を考慮した音量分析表示"""
     st.markdown('<h3 class="sub-header">音量分析詳細</h3>', unsafe_allow_html=True)
      
     st.markdown('<div class="metric-container">', unsafe_allow_html=True)
@@ -554,10 +554,10 @@ def display_volume_analysis_with_context(features):
     st.markdown('</div>', unsafe_allow_html=True)
 
 def display_comprehensive_analysis_with_context(features):
-    """コンテキスト考慮の総合分析表示"""
-    st.markdown('<h3 class="sub-header">コンテキスト考慮総合分析</h3>', unsafe_allow_html=True)
+    """録音環境を考慮した総合分析表示"""
+    st.markdown('<h3 class="sub-header">録音環境を考慮した総合分析</h3>', unsafe_allow_html=True)
     
-    # ルールベースの評価（コンテキスト考慮）
+    # ルールベースの評価（録音環境考慮）
     rule_based_evaluation = evaluate_clarity(features)
     
     # 機械学習による評価
@@ -579,6 +579,7 @@ def display_comprehensive_analysis_with_context(features):
     if ml_success and ml_available:
 
         st.markdown("#### 🤖 AI分析結果")
+        st.caption("AIが学習したパターンから判断した結果")
         st.markdown('<div class="metric-container">', unsafe_allow_html=True)
             
         if ml_prediction == "良好":
@@ -596,7 +597,7 @@ def display_comprehensive_analysis_with_context(features):
         st.write(advice_text)
         st.markdown('</div>', unsafe_allow_html=True)
         
-        st.markdown("#### コンテキスト考慮分析")
+        st.markdown("#### 録音環境を考慮した分析")
         st.markdown('<div class="metric-container">', unsafe_allow_html=True)
             
         if rule_based_evaluation['clarity_level'] == "良好":
@@ -605,14 +606,14 @@ def display_comprehensive_analysis_with_context(features):
             st.warning(f"**評価: {rule_based_evaluation['clarity_level']}**")
                 
         st.metric("明瞭度スコア", f"{rule_based_evaluation['score']}/100")
-        st.write("**コンテキスト考慮アドバイス:**")
+        st.write("**録音環境を考慮しながらのアドバイス:**")
         st.write(rule_based_evaluation['advice'])
-        st.write(f"**分析コンテキスト**: {rule_based_evaluation.get('recording_context', '不明')}")
+        st.write(f"**録音環境を考慮した分析**: {rule_based_evaluation.get('recording_context', '不明')}")
         st.markdown('</div>', unsafe_allow_html=True)
     
     else:
         # ルールベースのみの結果表示
-        st.markdown("#### コンテキスト考慮分析結果")
+        st.markdown("#### 録音環境を考慮した分析結果")
         
         st.markdown('<div class="metric-container">', unsafe_allow_html=True)
         st.metric("明瞭度スコア", f"{rule_based_evaluation['score']}/100")
@@ -625,14 +626,14 @@ def display_comprehensive_analysis_with_context(features):
         st.markdown('<div class="metric-container">', unsafe_allow_html=True)
         st.subheader("アドバイス")
         st.write(rule_based_evaluation['advice'])
-        st.write(f"**コンテキスト**: {rule_based_evaluation.get('recording_context', '不明')}")
+        st.write(f"**録音環境**: {rule_based_evaluation.get('recording_context', '不明')}")
         st.markdown('</div>', unsafe_allow_html=True)
     
     # 練習のヒント（コンテキスト考慮）
     show_context_aware_practice_hints(features, rule_based_evaluation)
 
 def show_context_aware_practice_hints(features, evaluation):
-    """コンテキスト考慮の練習ヒント"""
+    """録音環境を考慮しながらの練習ヒント"""
     st.markdown('<h3 class="sub-header">録音環境を考慮した練習のヒント</h3>', unsafe_allow_html=True)
     
     recording_source = features.get('recording_source', 'file')
@@ -679,7 +680,7 @@ def show_context_aware_practice_hints(features, evaluation):
             - 疲れているときや急いでいるときも語尾を忘れずに
             """)
     
-    st.success("コンテキストを考慮した分析が完了しました！日常会話での実践を心がけましょう。")
+    st.success("録音環境を考慮した分析が完了しました！日常会話での実践を心がけましょう。")
 
 def main():
     initialize_session_state() 
