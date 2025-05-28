@@ -12,6 +12,8 @@ import time
 import asyncio
 import logging
 from pydub import AudioSegment
+import matplotlib.pyplot as plt
+plt.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Tahoma']
 
 # アプリケーション設定
 st.set_page_config(
@@ -38,9 +40,6 @@ def initialize_session_state():
     if 'model_trained' not in st.session_state:
         st.session_state.model_trained = False
     
-    if 'recording' not in st.session_state:
-        st.session_state.ml_model = VoiceQualityModel()
-
     if 'recording' not in st.session_state:
         st.session_state.recording = False  
     if 'recorded_audio' not in st.session_state:
@@ -76,6 +75,10 @@ from ml_model import VoiceQualityModel, generate_training_data
 
 # 音声分析関連のインポート
 from voice_analysis import VoiceFeatureExtractor, plot_audio_analysis, evaluate_clarity, get_feedback
+
+# 機械学習モデルの初期化
+if 'ml_model' not in st.session_state:
+    st.session_state.ml_model = VoiceQualityModel()
 
 # WebRTC関連のライブラリのインポート:FFmpeg警告の無視設定を追加
 import warnings
@@ -386,20 +389,20 @@ def audio_frame_callback(frame):
     return frame
 
 # リアルタイム音量メーターの表示
-def display_volume_meter(placeholder):
+# def display_volume_meter(placeholder):
     if len(st.session_state.volume_history) > 0:
         df = pd.DataFrame(st.session_state.volume_history)
         df = df.reset_index().rename(columns={"index": "時間"})
        
-        chart = alt.Chart(df).mark_line().encode(
-            x=alt.X("時間", axis=None),
-            y=alt.Y("音量", title="音量 (dB)", scale=alt.Scale(domain=[-80, 0]))
-        ).properties(
-            height=200,
-            width='container'
-        )
+        #chart = alt.Chart(df).mark_line().encode(
+            #x=alt.X("時間", axis=None),
+           # y=alt.Y("音量", title="音量 (dB)", scale=alt.Scale(domain=[-80, 0]))
+        #).properties(
+        #    height=200,
+        #    width='container'
+        #)
         
-        placeholder.altair_chart(chart, use_container_width=True)
+        # passlaceholder.altair_chart(chart, use_container_width=True)
 
 # フィードバック履歴の表示
 def display_feedback_history(placeholder):
@@ -831,7 +834,7 @@ def main():
             
             # モデル訓練の説明
             st.markdown("""<div class="info-box">
-            <h3>🤖 AIについて</h3>
+            <h3>AIについて</h3>
             <p>このページでは、機械学習モデル（AI）を訓練・評価することができます。</p>
             <p>AIを訓練することで、音声分析の精度が向上し、より詳細なフィードバックが得られます。</p>
             <p><strong>※ 初回利用時は必ずAI訓練を実行してください。</strong></p>
@@ -871,14 +874,32 @@ def main():
                             list(importance.items()), 
                             columns=['特徴量', '重要度']
                         ).sort_values('重要度', ascending=False)
-    
-                        # グラフ表示
-                        fig, ax = plt.subplots(figsize=(10, 6))
-                        ax.barh(importance_df['特徴量'], importance_df['重要度'])
-                        ax.set_xlabel('重要度')
-                        ax.set_title('各特徴量がAI予測に与える影響')
-                        plt.tight_layout()
-                        st.pyplot(fig)
+
+
+                # 日本語ラベルを英語に変換
+                english_labels = {
+                '平均音量': 'Mean Volume',
+                '音量変動': 'Volume Variation',
+                '文頭音量': 'Start Volume',
+                '文中音量': 'Middle Volume',
+                '文末音量': 'End Volume',
+                '音量低下率': 'Volume Drop Rate',
+                '最後20%音量': 'Last 20% Volume',
+                '最後20%低下率': 'Last 20% Drop Rate',
+                'スペクトル重心': 'Spectral Centroid',
+                '話の速度': 'Speech Rate'
+                }
+
+                # 日本語を英語に変換
+                importance_df['Feature_EN'] = importance_df['特徴量'].map(english_labels)
+
+                # グラフ表示
+                fig, ax = plt.subplots(figsize=(10, 6))
+                ax.barh(importance_df['特徴量'], importance_df['重要度'])
+                ax.set_xlabel('Importance')
+                ax.set_title('Feature Importance for AI Prediction')
+                plt.tight_layout()
+                st.pyplot(fig)
     
             if not st.session_state.model_trained:
                 st.write("---")
@@ -1354,25 +1375,6 @@ def display_volume_meter(placeholder):
         
         placeholder.altair_chart(chart, use_container_width=True)
 
-def display_feedback_history(placeholder):
-    """リアルタイムフィードバック履歴の表示"""
-    if len(st.session_state.feedback_history) > 0:
-        placeholder.subheader("リアルタイムフィードバック履歴")
-
-        for i, feedback in enumerate(reversed(st.session_state.feedback_history[-5:])):
-            level = feedback["level"]
-            css_class = f"feedback-box feedback-{level}"
-            
-            placeholder.markdown(
-                f"<div class='{css_class}'>"
-                f"<p>{feedback['time']} - {feedback['message']}</p>"
-                f"<p>文末の音量低下率: {feedback['drop_rate']:.2f}</p>"
-                f"</div>",
-                unsafe_allow_html=True
-            )
-
-
-
     elif st.session_state.page == "モデル訓練":
         st.markdown('<h2 class="sub-header">AI訓練と評価</h2>', unsafe_allow_html=True)
     
@@ -1394,7 +1396,7 @@ def display_feedback_history(placeholder):
         
         # モデル訓練の説明
         st.markdown("""<div class="info-box">
-        <h3>🤖 AIについて</h3>
+        <h3>AIについて</h3>
         <p>このページでは、機械学習モデル（AI）を訓練・評価することができます。</p>
         <p>AIを訓練することで、音声分析の精度が向上し、より詳細なフィードバックが得られます。</p>
         <p><strong>※ 初回利用時は必ずAI訓練を実行してください。</strong></p>
@@ -1434,12 +1436,36 @@ def display_feedback_history(placeholder):
                         list(importance.items()), 
                         columns=['特徴量', '重要度']
                     ).sort_values('重要度', ascending=False)
+                    
+                # デバッグ用: 実際の特徴量名を確認
+                st.write("**🔍 デバッグ情報**")
+                st.write("特徴量名一覧:")
+                for i, feature_name in enumerate(importance_df['特徴量']):
+                    st.write(f"{i+1}. '{feature_name}' (型: {type(feature_name)})")
+            
+                st.write("英語ラベル辞書のキー:")
+                # 日本語ラベルを英語に変換
+                english_labels = {
+                    '平均音量': 'Mean Volume',
+                    '音量変動': 'Volume Variation',
+                    '文頭音量': 'Start Volume',
+                    '文中音量': 'Middle Volume',
+                    '文末音量': 'End Volume',
+                    '音量低下率': 'Volume Drop Rate',
+                    '最後20%音量': 'Last 20% Volume',
+                    '最後20%低下率': 'Last 20% Drop Rate',
+                    'スペクトル重心': 'Spectral Centroid',
+                    '話の速度': 'Speech Rate'
+                }
+                for key in english_labels.keys():
+                    st.write(f"- '{key}'")                    
+
 
                     # グラフ表示
                     fig, ax = plt.subplots(figsize=(10, 6))
-                    ax.barh(importance_df['特徴量'], importance_df['重要度'])
-                    ax.set_xlabel('重要度')
-                    ax.set_title('各特徴量がAI予測に与える影響')
+                    ax.barh(importance_df['Feature_EN'], importance_df['重要度'])
+                    ax.set_xlabel('Importance')
+                    ax.set_title('Feature Importance for AI Prediction')
                     plt.tight_layout()
                     st.pyplot(fig)
 
