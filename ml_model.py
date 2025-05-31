@@ -6,9 +6,14 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
 import logging
 import pandas as pd
+import sys
+import traceback
+
 
 # ロガーの設定
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 class VoiceQualityModel:
     """音声品質を評価する機械学習モデル"""
@@ -257,7 +262,7 @@ def generate_training_data():
 
         # シミュレーションデータを生成
         # 「良好」な音声データ（80個）
-        for i in range(80):
+        for i in range(70):
             features = [
                 np.random.uniform(0.08, 0.25),   # mean_volume
                 np.random.uniform(0.015, 0.04),   # std_volume
@@ -270,11 +275,17 @@ def generate_training_data():
                 np.random.uniform(1200, 2200),   # spectral_centroid_mean
                 np.random.uniform(2.5, 4.5),     # speech_rate
             ]
+
+            # ノイズを追加（現実的なバラツキを再現）
+            noise = np.random.normal(0, 0.01, len(features))
+            features = np.array(features) + noise
+
+
             x.append(features)
             y.append("良好")  
 
         # 「文末が弱い」音声のデータ
-        for i in range(80):
+        for i in range(70):
             features = [
                 np.random.uniform(0.08, 0.25),   # mean_volume
                 np.random.uniform(0.015, 0.04),   # std_volume
@@ -287,6 +298,11 @@ def generate_training_data():
                 np.random.uniform(1000, 2000),     # spectral_centroid_mean
                 np.random.uniform(2, 4),           # speech_rate
             ]
+            # ノイズを追加（現実的なバラツキを再現）
+            noise = np.random.normal(0, 0.01, len(features))
+            features = np.array(features) + noise
+
+            
             x.append(features)
             y.append("文末が弱い")
 
@@ -304,6 +320,12 @@ def generate_training_data():
                 np.random.uniform(800, 1400),    # spectral_centroid_mean（低め）
                 np.random.uniform(1.5, 3),       # speech_rate（遅め）        
             ]
+
+            # ノイズを追加
+            noise = np.random.normal(0, 0.008, len(features))  # 少し弱めのノイズ
+            features = np.array(features) + noise
+
+
             x.append(features)
             y.append("小声すぎる")
 
