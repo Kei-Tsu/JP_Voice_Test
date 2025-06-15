@@ -1,4 +1,6 @@
 # ml_model.py
+# 日本語フォント対応
+import japanize_matplotlib
 import numpy as np
 import matplotlib.pyplot as plt
 import librosa
