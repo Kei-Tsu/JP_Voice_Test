@@ -27,8 +27,8 @@ class VoiceQualityModel:
 
         # 特徴量の名前（日本語で表示用）
         self.feature_names = [
-            '平均音量', '音量変動', '文頭音量', '文中音量', '文末音量',
-            '音量低下率', '最後20%音量', '最後20%低下率', 'スペクトル重心', '話の速度'
+            'Mean Volume(平均音量)', 'Volume Variation(音量変動)', 'Start Volume(文頭音量)', 'Middle Volume(文中音量)', 'End Volume(文末音量)',
+            'Volume Drop Rate(音量低下率)', 'Last 20% Volume(最後20%音量)', 'Last 20% Drop Rate(最後20%低下率)', 'Spectral Centroid(スペクトル重心)', 'Speech Rate(話の速度)'
         ]
         
         # モデルの性能記録用
