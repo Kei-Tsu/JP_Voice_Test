@@ -271,16 +271,16 @@ def plot_audio_analysis(features, audio_data, sr):
         
         info_text = f"""
 音量補正情報:
-• 録音ソース: {recording_source}
-• 親密さレベル: {intimacy_level}
-• 音量調整比率: {adjustment_ratio:.2f}
-• 文末音量低下率: {features.get('end_drop_rate', 0):.3f}
+• Source: 録音ソース: {recording_source}
+• Intimacy Level: 親密さレベル: {intimacy_level}
+• Volume Adjustment: 音量調整比率: {adjustment_ratio:.2f}
+• End Drop Rate: 文末音量低下率: {features.get('end_drop_rate', 0):.3f}
 
 親密さレベルの説明:
-• very_intimate: とても親密（家族間のソフトな声）
-• intimate: 親密（恋人同士の普通の声）
-• casual: カジュアル（友人との会話）
-• formal: フォーマル（公式な場での話し方）
+• very_intimate: Family Conversation とても親密（家族間のソフトな声）
+• intimate: Close Friends/Partners 親密（恋人同士の普通の声）
+• casual: Chit Chat カジュアル（友人との会話）
+• formal: Business/Formal フォーマル（公式な場での話し方）
         """
 
         ax3.text(0.1, 0.5, info_text, fontsize=10, verticalalignment='center', 
